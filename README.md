@@ -18,8 +18,7 @@ This process is done in two phases: first a self-play phase where the system pla
 		- For solvable subgames (subtrees where all nodes have had all their branches traversed), compute counterfactual reaches (probabilities of arriving at that node given all possible opponent hands) and forward reaches (probabilities of arriving at each reachable endgame) aligned to the recorded terminal sets.
 		- Derive per‑action advantages at POV nodes from reach‑weighted payoffs (aka expected values); write resulting advantage samples to disk.
 - Training phase (model learning)
-	- Advantage samples from each collection worker are unified into a single training data pool, then split into training and validation sets and used to train the advantage network.*
-			* Model training code exists under `strategos_tools/AIOps/`; the actual model architecture is intentionally left private, but is available on request.
+	- Advantage samples from each collection worker are unified into a single training data pool, then split into training and validation sets and used to train the advantage network. Note: Model training code exists under `strategos_tools/AIOps/`; the actual model architecture is intentionally left private, but is available on request.
 
 ### Repository structure (module‑level)
 - `strategos_deuces/` — Cythonized derivative of Worldveil's Deuces library (MIT; [worldveil/deuces](https://github.com/worldveil/deuces)); used for the hand evaluator it contains.
@@ -32,8 +31,7 @@ This process is done in two phases: first a self-play phase where the system pla
 	- `infoset_ops.*`: implements concept of hidden information; an infoset is basically a game state as observed by a specific player
 	- `actionset_ops.*`: operations related to deriving sets of available actions for a given game position
 - `strategos_tools/utils/` — Various helpful numerical and data-management tools/operations (`funcs.*`, `data_structs.*`, `data_ops.*`).
-- `strategos_tools/AIOps/` — All neural net code, including training loop logic and math for advantage estimation and strategy calculation (`EstimatorOps.*`, `nn_utils.py`, `training.py`).*
-		* Note: Model architecture lives in `models.py` which is excluded from this public repo but available on request.
+- `strategos_tools/AIOps/` — All neural net code, including training loop logic and math for advantage estimation and strategy calculation (`EstimatorOps.*`, `nn_utils.py`, `training.py`). Note: Model architecture lives in `models.py` which is excluded from this public repo but available on request.
 - `strategos_tools/CFR/` — CFR logic which conducts tree traversal and target calculation (`CollectionOps.*`).
 - `scripts/` — TO BE ADDED. This will contain orchestration scripts for collection/monitoring/training, and form the algorithm's shell entry points.
 
