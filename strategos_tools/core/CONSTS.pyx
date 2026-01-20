@@ -114,18 +114,18 @@ cdef:
 	uint DIAMONDS = 3
 	uint CLUBS    = 4
 
-	uint BOARD                = 0
-	uint HOLE                 = 1
+	uint BOARD                = 0 # Index to access board cards inside card arrays
+	uint HOLE                 = 1 # Index to access hole cards inside card arrays
 	uint MAX_HOLE_CARDS       = 2
 	uint MAX_BOARD_CARDS      = 5
+	uint MAX_OBSERVABLE_CARDS = MAX_HOLE_CARDS + MAX_BOARD_CARDS # =7
+	uint MAX_DEALT_CARDS      = ( MAX_HOLE_CARDS * NUM_PLAYERS ) + MAX_BOARD_CARDS # =9 (for headsup)
 	uint MAX_HAND_SIZE        = 5
 	uint NUM_RANKS            = 13
 	uint NUM_SUITS            = 4
 	uint DECK_SIZE            = 52
-	uint LARGEST_PRIME        = 239
+	uint LARGEST_PRIME        = 239 # Used for deuce hand evaluation logic
 	uint NUM_POSSIBLE_HANDS   = 1326 # 52 choose 2
-	uint MAX_DEALT_CARDS      = ( MAX_HOLE_CARDS * NUM_PLAYERS ) + MAX_BOARD_CARDS # =9 (for headsup)
-	uint MAX_OBSERVABLE_CARDS = MAX_HOLE_CARDS + MAX_BOARD_CARDS # =7
 
 	# Card vec indexing/sizing 
 	uint CARD      = 0
@@ -137,6 +137,8 @@ cdef:
 	uint2 FULL_VEC_DECK = cyarr( (DECK_SIZE+1,CVEC_SIZE), UINTSIZE, 'I' )
 	list  CARD_STRINGS  = []
 
+# Build the full deck of card vectors
+cdef:
 	str   _cStr
 	uint  _c, _r, _s
 
@@ -160,7 +162,7 @@ for _r from 1 <= _r <= NUM_RANKS:
 
 
 cdef:
-	# Event vector indexing/sizing
+	# Event type identification
 	uint NULLEVENT         = 0
 	uint FOLD              = 1
 	uint CHECK             = 2
@@ -172,11 +174,13 @@ cdef:
 	uint NUM_PLAYER_ETYPES = 4
 	uint NON_RAISE_ETYPES  = 3
 
+	# Some useful stuff for printing human-readable event details
 	tuple TYPECODES = ( "N", "F", "CH", "CA", "R", "BD", "PD" )
 	tuple TYPENAMES = ( "NULL ", "FOLD ", "CHECK", "CALL ", "RAISE", "BDEAL", "PDEAL" )
 	tuple EKEYS     = ( "EventType", "PlayedBy", "RaiseAmount", "TotalBet", 
 					"Is_AllIn", "AllInDiff", "DealtTo", "CardsDealt" )
 	
+	# Event vector indexing/sizing
 	uint TYPE      = 0
 	uint PLAYEDBY  = 1
 	uint IS_ALLIN  = 2
@@ -197,8 +201,8 @@ cdef:
 	uint BPOS       = 1 # Button position
 	uint SBAM       = 2 # Small blind amount
 	uint STK        = 3 # Do initialConditions[ STK: ] for array of all players' starting stacks
-	uint STK1       = 4
-	uint STK2       = 5
+	uint STK1       = 4 # Player1 stack index
+	uint STK2       = 5 # Player2 stack index
 	uint NUM_ICONDS = 6
 
 	# Round identifiers
@@ -229,4 +233,5 @@ cdef:
 	float BASE_LRATE      = 0.001
 	uint  MAX_GPUS        = 8
 
+	
 # *-* #

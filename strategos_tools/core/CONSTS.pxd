@@ -184,4 +184,5 @@ cdef:
 	float BASE_LRATE
 	uint  MAX_GPUS
 
+	
 # *-* #
