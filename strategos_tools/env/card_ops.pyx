@@ -2,6 +2,7 @@
 # cython: language_level 3
 # cython: profile = False
 
+
 cimport cython
 from libc.stdlib   cimport rand as RNG
 from libc.string   cimport memcpy
@@ -20,9 +21,9 @@ from termcolor import colored
 # We represent cards in different ways for different purposes. By default, we use a single int ∈ 
 # [1-52]. When we ultimately use cards as neural net inputs later, we use card vectors of the form:
 # [cardID, rankID, suitID], cardID ∈ [1,52], rankID ∈ [1,13], suitID ∈ [1,4]. This module provides
-# basic card-level ops such as drawing from the deck, ops for moving between card representations,
-# tools for interfacing with the Deuces module to do hand scoring, and some more esoteric stuff 
-# like assigning unique IDs to all 2-card hands which we later use to order potential hand histories.
+# basic card-level ops such as drawing from the deck, moving between card representations,
+# interfacing with the Deuces module to do hand scoring, and some more esoteric stuff like assigning
+# unique IDs to all 2-card hands which we later use to order potential hand histories.
 # ==================================================================================================
 
 
@@ -110,7 +111,7 @@ cdef uint2 VecDeck(): #noexcept:
 	return FULL_VEC_DECK[1:].copy()
 
 # Return FULL_VEC_DECK minus anything in excludeCards. Gaps are just for pretty printing
-cdef uint2 FilteredDeck( uint2 excludeCards, bint include_gaps=FALSE ): #noexcept:
+cdef uint2 FilteredDeck( uint2 excludeCards, bint Include_Gaps=FALSE ): #noexcept:
 
 	cdef uint  nxCards  = excludeCards.shape[ 0 ]
 	cdef uint2 fullDeck = VecDeck()
@@ -119,25 +120,25 @@ cdef uint2 FilteredDeck( uint2 excludeCards, bint include_gaps=FALSE ): #noexcep
 		return fullDeck 
 
 	cdef:
-		uint  nCards   = DECK_SIZE if (include_gaps==TRUE) else DECK_SIZE-nxCards, n=0, d, c, deckCardID
+		uint  nCards   = DECK_SIZE if Include_Gaps else DECK_SIZE-nxCards, n=0, d, c, deckCardID
 		uint2 partDeck = cyarr( (nCards,CVEC_SIZE), UINTSIZE, 'I' )
 		uint1 deckCard
 		bint  Card_Excluded
 
-	if include_gaps: partDeck[:]=0
+	if Include_Gaps: partDeck[:] = 0
 	for d from 0 <= d < DECK_SIZE:
 		deckCard      = fullDeck[ d ]
 		deckCardID    = deckCard[ CARD ]
 		Card_Excluded = FALSE
 
 		for c from 0 <= c < nxCards: # Determine whether card is excluded
-			if excludeCards[ c,CARD ]==deckCardID:
+			if excludeCards[ c,CARD ] == deckCardID:
 				Card_Excluded=TRUE
 
 		if not Card_Excluded:
 			partDeck[ n ] = deckCard
 			n+=1
-		elif include_gaps: # Skip an idx, so partDeck[skippedIdx,:]=0 - useful for printing decks
+		elif Include_Gaps: # Skip an idx, so partDeck[skippedIdx,:]=0 - useful for printing decks
 			n+=1 
 
 	return partDeck
@@ -184,7 +185,7 @@ cdef uint  HandIndex( uint2 hand ): #noexcept:
 	return HAND_IDX_MAP.at( HandProduct( hand ) )
 
 # Just takes some cardVecs, converts to deuce integers, then uses deuce's card formatting to make it pretty *-* 
-cdef list  PrettyCardStrings( uint2 cardVecs, bint compact=FALSE, bint center=TRUE ): #noexcept:
+cdef list  PrettyCardStrings( uint2 cardVecs, bint Compact=FALSE, bint Center=TRUE ): #noexcept:
 
 	cdef uint nCards   = cardVecs.shape[ 0 ]
 	cdef bint No_Cards = nCards==0 or (NP( cardVecs )==0).all()
@@ -192,7 +193,7 @@ cdef list  PrettyCardStrings( uint2 cardVecs, bint compact=FALSE, bint center=TR
 
 	cdef int1 deuceInts = DeuceInts( cardVecs )
 	cdef int  c
-	return [ Deuce.int_to_pretty_str( c, compact, center ) for c in deuceInts ]
+	return [ Deuce.int_to_pretty_str( c, Compact, Center ) for c in deuceInts ]
 
 # Returns array of best-scoring hand that can be formed from the given card sets
 cdef uint2 BestHand( uint2 holeCards, uint2 boardCards ): #noexcept:
@@ -348,5 +349,5 @@ cdef uint2 find_winning_cards( uint2 from_winning_hand, uint2 with_hole_cards, s
 def cvecs_from_strings( cStrings ): return NP( card_vectors_from_strings( cStrings ),dtype=uintc )
 def pretty_card_strings( cardVecs, compact=TRUE, center=FALSE ): return PrettyCardStrings( cardVecs, compact, center )
 
-# print( '\033[3m' + "CARD OPS LOADED" + '\033[0m' )
+
 # *-* # 

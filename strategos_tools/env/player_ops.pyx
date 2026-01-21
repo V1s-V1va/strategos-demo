@@ -2,6 +2,7 @@
 #cython: language_level 3
 #cython: profile = False
 
+
 from cpython.array cimport clone as pyarr
 
 
@@ -22,19 +23,20 @@ cdef uint1       OpponentsOf( uint player ): #noexcept:
 	for p from 1 <= p <= NUM_PLAYERS:
 		if p != player:
 			opponents[ oppIdx ] = p
-			oppIdx+=1
+			oppIdx += 1
 
 	return opponents[ :oppIdx ]
 
 cdef inline bint Are_Opponents( uint p1, uint p2 ): #noexcept:
 	return FALSE if ( (p1==DEALER) or (p2==DEALER) or (p1==p2) ) else TRUE
 
-# Useful for game logic which finds the next player to act
+# Useful for game logic which needs to find the next player to act
 cdef inline uint NextNonDealer( uint p ): #noexcept:
 	return p+1 if p+1 <= NUM_PLAYERS else 1
 
 # Useful for when we need to find who was the previous player to act
 cdef inline uint PrevNonDealer( uint p ): #noexcept:
 	return p-1 if p-1 > 0 else NUM_PLAYERS
+
 
 # *-* #

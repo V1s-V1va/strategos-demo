@@ -1,6 +1,7 @@
 #distutils: language = c
 #cython: language_level 3
 
+
 cimport cython
 
 from strategos_tools.core.CONSTS      cimport *

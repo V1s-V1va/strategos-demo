@@ -2,6 +2,7 @@
 # cython: language_level 3
 # cython: profile = False
 
+
 cimport cython
 
 from libc.string   cimport memcpy, memset
@@ -19,21 +20,25 @@ from numpy import asarray as NP, uintc
 # ==================================================================================================
 # A gamenode basically represents a HUNLTH gamestate. A "gamestate" is synonymous with a set of
 # initial conditions (i.e. game parameters) and a game history consisting of a sequence of player
-# actions which we call gameevents. The only real information we store on a node is the initial 
-# game conditions and game history. Instead of persisting tons of information like current stacks,
+# actions which we call gameevents. The initial conditions + game history are the only actual
+# information we store on a node. Instead of persisting tons of information like current stacks,
 # current cards etc, we call functions to scan over history and compute this information as we
 # need it in real time - this ends up being significantly faster than persisting all these game 
 # variables and computing new updated values for them every time a new action evolves the state.
-# The key takeaway is: gamenode = game state = initial conditions + history
+# The key takeaway is: gamenode = game state = initial conditions + history.
+# NOTE: All game histories always start with a NULLEVENT vector of all 0s.
 # ==================================================================================================
 
 
 cdef class gamenode:
 
-	# Note: All game histories always start with a NULLEVENT vector of all 0s
-	def __init__( self, uint2 history, uint nPlayers=2, uint buttonPos=0, uint smallBlindAmt=0, uint1 initStacks=None, uint1 initialConditions=None ):
+	# Initial conditions can either be specified individually, or provided in a special array
+	def __init__( self, uint2 history, uint nPlayers=2, uint buttonPos=0, uint smallBlindAmt=0, uint1 initStacks=None, 
+						uint1 initialConditions=None ):
+
 		if initialConditions is None:
 			self.__MANUAL_INIT__( history, nPlayers, buttonPos, smallBlindAmt, initStacks )
+
 		else:
 			self.__AUTOINIT__( history, initialConditions )
 
@@ -54,6 +59,8 @@ cdef class gamenode:
 		self.NUM_PDEALS  = self.PLAYER_COUNT * MAX_HOLE_CARDS
 		self.PDEALS_DONE = 1 + self.NUM_PDEALS              # 1 nullevent + 2 PDEALs ∀ player
 		self.BLINDS_DONE = 1 + self.NUM_PDEALS + NUM_BLINDS # 1 nullevent + 2 PDEALs ∀ player + 2 blinds
+		self.SB_STEP     = self.NUM_PDEALS + 1
+		self.BB_STEP     = self.NUM_PDEALS + 2
 
 	# Initializes from a history array and a bunch of individual game parameters
 	cdef void      __MANUAL_INIT__( self, uint2 history, uint nPlayers, uint bpos, uint smallBlind, uint1 initStacks ): #noexcept:
@@ -104,8 +111,8 @@ cdef class gamenode:
 		# Return NULLEVENT if above loop finishes without finding a matching event
 		return gameevent() 
 
-	# Returns array of hole card vecs for specified player; fill_to_max inserts 0s for undealt cards
-	cdef uint2       HoleCards( self, uint for_player, bint fill_to_max=FALSE ): #noexcept:
+	# Returns array of hole card vecs for specified player; Fill_To_Max inserts 0s for undealt cards
+	cdef uint2       HoleCards( self, uint for_player, bint Fill_To_Max=FALSE ): #noexcept:
 
 		cdef:
 			uint  stop   = self.PDEALS_DONE if self.hLen > self.PDEALS_DONE else self.hLen, c=0, s
@@ -119,11 +126,13 @@ cdef class gamenode:
 				hCards[ c ] = CardOps.CardVector( e[ CDEALT ] )
 				c+=1 
 
-		if (fill_to_max) and (c!=MAX_BOARD_CARDS): hCards[ c:,: ]=0
-		return hCards if fill_to_max else hCards[ :c ]
+		if (Fill_To_Max) and (c!=MAX_BOARD_CARDS): 
+			hCards[ c:,: ]=0
 
-	# Returns array of board card vectors; fill_to_max as above
-	cdef uint2       BoardCards( self, bint fill_to_max=FALSE ): #noexcept:
+		return hCards if Fill_To_Max else hCards[ :c ]
+
+	# Returns array of board card vectors; Fill_To_Max as above
+	cdef uint2       BoardCards( self, bint Fill_To_Max=FALSE ): #noexcept:
 
 		cdef:
 			uint  c=0, s
@@ -137,13 +146,13 @@ cdef class gamenode:
 				bCards[ c ] = CardOps.CardVector( e[ CDEALT ] )
 				c+=1 
 
-		if (fill_to_max) and (c!=MAX_BOARD_CARDS): 
+		if (Fill_To_Max) and (c!=MAX_BOARD_CARDS): 
 			bCards[ c:,: ]=0
 
-		return bCards if fill_to_max else bCards[ :c ]
+		return bCards if Fill_To_Max else bCards[ :c ]
 
-	# Returns array of all dealt cards; validate arg is for eval ops where opponents are dealt "blank" cards
-	cdef uint2       AllDealtCards( self, bint validate=FALSE ): #noexcept:
+	# Returns array of all dealt cards; Validate arg is for eval ops where opponents are dealt "blank" cards
+	cdef uint2       AllDealtCards( self, bint Validate=FALSE ): #noexcept:
 
 		cdef:
 			uint  c=0, s
@@ -155,21 +164,23 @@ cdef class gamenode:
 			e = self.History[ s ]
 
 			if Is_Dealer_Action( e ):
-				if not validate:
-					allCards[ c ] = CardOps.CardVector( e[ CDEALT ] ); c+=1 
-					# memcpy( &allCards[ c,0 ], &self.History[ s,CDEALT ], CVEC_BYTES ); c+=1 # SLICING REPLACEMENT
+
+				if not Validate:
+					allCards[ c ] = CardOps.CardVector( e[ CDEALT ] )
+					c+=1 
+
 				elif self.History[ s,CDEALT ]!=0:
-					allCards[ c ] = CardOps.CardVector( e[ CDEALT ] ); c+=1 
-					# memcpy( &allCards[ c,0 ], &self.History[ s,CDEALT ], CVEC_BYTES ); c+=1 # SLICING REPLACEMENT
+					allCards[ c ] = CardOps.CardVector( e[ CDEALT ] )
+					c+=1 
 
 		return allCards[ :c ]
 
-	# Returns array of card vecs containing all cards which haven't yet been dealt
-	cdef uint2       AvailableDeck( self, bint include_gaps=FALSE, bint validate=FALSE ): #noexcept:
-		return CardOps.FilteredDeck( excludeCards=self.AllDealtCards( validate ), include_gaps=include_gaps )
+	# Returns card vec array for all cards which haven't yet been dealt, Validate arg as above
+	cdef uint2       AvailableDeck( self, bint Include_Gaps=FALSE, bint Validate=FALSE ): #noexcept:
+		return CardOps.FilteredDeck( excludeCards=self.AllDealtCards( Validate ), Include_Gaps=Include_Gaps )
 
 	# Counts num deal events in history, with filters for dealTo player & deals triggered by all-in actions
-	cdef uint        NumDeals( self, uint to_player=ANY, bint include_allin=TRUE ): #noexcept:
+	cdef uint        NumDeals( self, uint to_player=ANY, bint Include_AllIn=TRUE ): #noexcept:
 
 		cdef uint  nDeals=0, s
 		cdef uint1 e
@@ -179,7 +190,7 @@ cdef class gamenode:
 
 			if Is_Dealer_Action( e ):
 				if (to_player==ANY) or (e[ DEALTO ]==to_player):
-					if (not <bint>e[ IS_ALLIN ]) or (include_allin):
+					if (not <bint>e[ IS_ALLIN ]) or (Include_AllIn):
 						nDeals += 1
 
 		return nDeals
@@ -205,8 +216,8 @@ cdef class gamenode:
 
 		return nAllIns
 
-	# Calcs total amount each player has put into pot, option to start from a specific history step
-	# TODO: Correct ALLIN handling for >2pl ⟵Uh, does anything actually need to be done here for ALLINs?
+	# Calculates total each player has put into pot, option to start from a specific history step
+	# TODO: Determine whether we need to correct ALLIN handling for >2pl
 	cdef uint1       BetTotals( self, uint from_point=1 ): #noexcept:
 
 		cdef uint1 bTotals = pyarr( ARR_TMPLT_I, self.PLAYER_COUNT+1, zero=True ), e
@@ -219,7 +230,7 @@ cdef class gamenode:
 			
 		return bTotals
 
-	# Gets array of player IDs for all players in the game (regardless of their status)
+	# Gets array of player IDs for all players in the game, regardless of player status
 	cdef uint1       AllPlayers( self ): #noexcept:
 
 		cdef uint  p
@@ -231,7 +242,7 @@ cdef class gamenode:
 		return allPlayers
 
 	# Returns array of all players who are still able to act (i.e. are not folded or all-in)
-	# Get allplayers ⟶ ∀p, set allplayers[p]=0 if p is folded/all-in ⟶ collect all p: allplayers[p]≠0 
+	# Get allplayers ⟶ ∀p, set allplayers[p]=0 if p is folded/all-in ⟶ collect all p where allplayers[p]≠0 
 	cdef uint1       ActivePlayers( self ): #noexcept:
 
 		cdef uint  activeNum=0, s, p
@@ -250,26 +261,28 @@ cdef class gamenode:
 
 		return aPlayers[ :activeNum ]
 
-	# Sometimes useful to know how many players are active w/o actually needing to know which players they are
+	# Sometimes useful to know how many players are active without needing to know who they are
 	cdef uint        NumActivePlayers( self ): #noexcept:
 		return <uint>(self.PLAYER_COUNT - self.NumFolds() - self.NumAllIns())
 
 	# Returns history index where the current betting round started
 	cdef uint        CurrentRoundStart( self ): #noexcept:
 
-		# Round starts at most recent deal (except deals triggered by all-ins), so iter backwards to find it
+		# Round starts at most recent deal not triggered by an all-in, so iter backwards to find it
 		cdef uint  s
 		cdef uint1 e
 		for s from self.hLen > s >= 0:
 			e = self.History[ s ]
 			if (e[ PLAYEDBY ]==DEALER) and not <bint>(e[ IS_ALLIN ]): 
-				return s # will always return eventually since histories start with a NULLEVENT
+				return s
 
-	# Returns array of stack refunds resulting from all-in calls falling short of min required call amount
+		return 0
+
+	# Returns arr of stack refunds resulting from all-in calls falling short of required call amount
 	cdef uint1       StackAdjustments( self ): #noexcept:
 
 		cdef uint1 adjustments = pyarr( ARR_TMPLT_I, self.PLAYER_COUNT+1, zero=True ), e
-		cdef uint  P = self.BigBlindPlayer, prevP, s # P = BB initially since iteration starts right after big blind
+		cdef uint  P = self.BigBlindPlayer, prevP, s # P starts = BB since loop starts right after big blind
 
 		# Scan over history, find all allindiffs
 		for s from self.BLINDS_DONE <= s < self.hLen:
@@ -285,9 +298,9 @@ cdef class gamenode:
 		return adjustments
 
 	# Returns array of current stacks for all players
+	# Get bet totals ⟶ get adjustments ⟶ ∀ p, stacks[p] = startingStack - btotals[p] + adjustments[p]
 	cdef uint1       CurrentStacks( self ): #noexcept:
 
-		# Get bet totals ⟶ get adjustments ⟶ ∀ p, stacks[p] = startingStack - btotals[p] + adjustments[p]
 		cdef uint  p
 		cdef uint1 bTotals     = self.BetTotals(),                                                                     \
 				   adjustments = self.StackAdjustments(),                                                              \
@@ -302,8 +315,8 @@ cdef class gamenode:
 	# Gets current round ID: PREFLOP = 0, FLOP = 1, TURN = 2, RIVER = 3
 	cdef uint        CurrentStreet( self ): #noexcept:
 
-		# Only non-allin board deals advance round num
-		cdef uint nbDeals = self.NumDeals( to_player=BOARD, include_allin=FALSE ), s
+		# Only board deals not triggered by all-ins advance round num
+		cdef uint nbDeals = self.NumDeals( to_player=BOARD, Include_AllIn=FALSE ), s
 		if nbDeals==0:        return PREFLOP
 		if 1 <= nbDeals <= 3: return FLOP
 		if nbDeals==4:        return TURN
@@ -311,30 +324,37 @@ cdef class gamenode:
 
 	# Is current acting player posting a blind? 0 = not posting any blind, 1 = posting SB, 2 = posting BB
 	cdef inline uint BlindState( self ): #noexcept:
+
+		# NullEvent + 2 PDEALs ∀ player ⇒ currently posting SB
 		if self.hLen == 1 + self.NUM_PDEALS: 
-			return SB # NullEvent + 2 PDEALs ∀ player ⇒ currently posting SB
+			return SB 
+
+		# NullEvent + 2 PDEALs ∀ player + 1 SB ⇒ currently posting BB
 		elif self.hLen == 2 + self.NUM_PDEALS: 
-			return BB # NullEvent + 2 PDEALs ∀ player + 1 SB ⇒ currently posting BB
+			return BB 
+
 		return 0
 
 	# Checks whether current hand's deals and blinds have occured yet, useful for short circuits.
 	cdef inline bint Betting_Has_Started( self ): #noexcept:
 		return self.hLen > self.BLINDS_DONE
 
-	# Returns sequence of AllIn event & direct successor. If either not present, returns nullevent in its place
+	# Returns sequence of AllIn event & its direct successor, else NULLEVENT for either not present
 	# Very helpful for executing game logic around all-ins
 	cdef uint2       AllInSequence( self ): #noexcept:
 
 		cdef uint  s
 		cdef uint2 eSeq = cyarr( (2,EVEC_SIZE), UINTSIZE, 'I' )
-		eSeq[:] = 0 # Inits eSeq with NULLEVENTs, tells us later whether all-in & response have happened
 
+		# Init event sequence with NULLEVENTS, only overwrite if relevant events have occurred
+		eSeq[:] = 0
 		for s from self.BLINDS_DONE <= s < self.hLen:
-			if self.History[ s,IS_ALLIN ]:
-				eSeq[ 0 ] = self.History[ s ]
+
+			if self.History[ s,IS_ALLIN ]: # found an all-in event
+				eSeq[ 0 ] = self.History[ s ] 
 				
-				if s+1 < self.hLen: 
-					eSeq[ 1 ] = self.History[ s+1 ]
+				if s+1 < self.hLen: # response event has happened
+					eSeq[ 1 ] = self.History[ s+1 ] 
 
 				break
 
@@ -344,25 +364,29 @@ cdef class gamenode:
 	# Check exclusion conditions ⟶ check for AllIn seq ⟶ check if all bcards dealt yet
 	cdef bint        Awaiting_AllIn_Deal( self ): #noexcept:
 
-		if self.Betting_Has_Started()==FALSE:
+		if not self.Betting_Has_Started():
 			return FALSE
+
+		# On river ⇒ all cards already dealt ⇒ no more deals needed
 		if self.CurrentStreet()==RIVER:
-			return FALSE # On river ⇒ all cards already dealt ⇒ no more deals needed
+			return FALSE 
 
 		cdef uint2 allInSeq     = self.AllInSequence()
 		cdef uint  nBCards      = self.NumDeals( BOARD ),                                                              \
 				   allInType    = allInSeq[ 0,TYPE ],                                                                  \
 				   responseType = allInSeq[ 1,TYPE ]
 
+		# If no all-ins have happened, nothing to handle
 		if allInType==NULLEVENT:
-			return FALSE # No all-ins have happened, nothing to handle here
+			return FALSE 
 
+		# AllIn calls immediately trigger deal sequence
 		if allInType==CALL:
-			return nBCards < MAX_BOARD_CARDS # AllIn calls immediately trigger deal sequence
+			return nBCards < MAX_BOARD_CARDS 
 
-		if allInType==RAISE:     
+		if allInType==RAISE:
 			return FALSE if (responseType==NULLEVENT or responseType==FOLD) else nBCards < MAX_BOARD_CARDS 
-		# 					(￪  wait for response  ￪ or ￪  game is over  ￪)       (￪   deal more cards   ￪)
+		# 				    ￪ waiting for response ￪    ￪  game is over  ￪      ￪ need to deal more cards ￪
 
 	# Are we awaiting a player (i.e. nondealer) fold/call response to an all-in action?
 	cdef bint        Awaiting_AllIn_Response( self ): #noexcept:
@@ -378,17 +402,19 @@ cdef class gamenode:
 	# Does the dealer have more cards to deal before betting starts for this round?
 	cdef bint        Round_Deals_Done( self ): #noexcept:
 
-		cdef uint nbDeals = self.NumDeals( to_player=BOARD, include_allin=FALSE )
+		cdef uint nbDeals = self.NumDeals( to_player=BOARD, Include_AllIn=FALSE )
 		cdef bint Flop_Deals_Done  = nbDeals==3,                                                                       \
 				  Turn_Deals_Done  = nbDeals==4,                                                                       \
 				  River_Deals_Done = nbDeals==5
 
+		# Preflop deals done if all players have gotten hcards
 		if nbDeals==0:
-			return self.hLen >= self.NUM_PDEALS+1 # Preflop deals done if all players have gotten hcards
+			return self.hLen >= self.NUM_PDEALS+1 # +1 to account for initial NULLEVENT
+
 		else:          
 			return ( (Flop_Deals_Done) or (Turn_Deals_Done) or (River_Deals_Done) ) 
 
-	# Checks whether all specified players have acted since from_point, useful game logic helper
+	# Checks whether all specified players have acted since from_point, useful game logic helper.
 	cdef bint        Players_Have_Acted( self, uint1 players, uint from_point=0, bint Include_Blinds=FALSE ): #noexcept:
 
 		if self.hLen - from_point < players.shape[ 0 ]: 
@@ -403,7 +429,9 @@ cdef class gamenode:
 			P_Has_Acted = FALSE
 
 			for s from from_point <= s < self.hLen:
+
 				if self.History[ s,PLAYEDBY ]==player: 
+
 					if (Include_Blinds) or (s >= self.BLINDS_DONE): 
 						P_Has_Acted = TRUE
 						break
@@ -413,8 +441,8 @@ cdef class gamenode:
 
 		return TRUE # Loop never found a player who hasn't done something yet
 
-	# Do all players' bet totals since from_point match? Part of round-ending logic
-	# ASSUMES p IS ACTIVE ∀p ∈ for_players. Checking bet equality for inactive p breaks game logic
+	# Do all players' bet totals since from_point match? Part of round-ending logic.
+	# ASSUMES p IS ACTIVE ∀p ∈ for_players. Checking bet equality for inactive p breaks game logic.
 	cdef bint        All_Bets_Match( self, uint1 for_players, uint from_point=0 ): #noexcept:
 
 		if for_players.shape[ 0 ] <= 1:
@@ -451,7 +479,8 @@ cdef class gamenode:
 		if self.NumAllIns() > 0:
 			return not self.Awaiting_AllIn_Response()
 
-		else: # Given above checks, we don't have to consider any special AllIn or Preflop conditions
+		# Given above checks, we don't have to consider any special AllIn or Preflop conditions
+		else: 
 			aPlayers = self.ActivePlayers()
 			rndStart = self.CurrentRoundStart()
 			return self.Players_Have_Acted( aPlayers,rndStart ) and self.All_Bets_Match( aPlayers,rndStart )
@@ -462,7 +491,6 @@ cdef class gamenode:
 
 		cdef uint1 lastAction = self.History[ self.hLen-1 ]
 		
-		# Easy exclusion conditions
 		if not self.Betting_Has_Started(): 
 			return FALSE
 
@@ -476,7 +504,7 @@ cdef class gamenode:
 			return FALSE
 
 		if self.NumActivePlayers() <= 1:   
-			return TRUE # Can only safely do this since we've done Awaiting_AllIn_ checks
+			return TRUE # Can only safely do this since we've done Awaiting_AllIn_* checks
 
 		# Only remaining terminal case now is non-allin showdown, i.e. CurrentStreet==RIVER & Current_Round_Over
 		cdef bint Round_Over = self.Current_Round_Over(), Showdown = Round_Over and self.CurrentStreet()==RIVER
@@ -504,7 +532,7 @@ cdef class gamenode:
 	cdef bint        Is_Dealer_Position( self ): #noexcept:
 		return ( (not self.Round_Deals_Done()) or (self.Awaiting_AllIn_Deal()) or (self.Current_Round_Over()) )
 
-	# Is this the first step in the current round?
+	# Is this the first step in the current round? 
 	cdef bint        At_Round_Start( self ): #noexcept:
 		return self.hLen-1==self.CurrentRoundStart()
 
@@ -532,12 +560,12 @@ cdef class gamenode:
 		return NextNonDealer( lastPlayer )
 
 	# Special case of Predecessor, allows excluding dealer nodes; returns copy of self if empty hist.
-	cdef gamenode    ParentNode( self, bint include_deals=FALSE ): #noexcept:
+	cdef gamenode    ParentNode( self, bint Include_Deals=FALSE ): #noexcept:
 
 		if self.hLen==1:
 			return gamenode( history=self.History.copy(), initialConditions=self.InitialConditions() )
 
-		if include_deals:
+		if Include_Deals:
 			return self.Predecessor()
 
 		# Ok, definitely want to exclude dealer nodes at this point
@@ -555,11 +583,11 @@ cdef class gamenode:
 			if subLen==1 or stepNode.ActingPlayer() != DEALER: 
 				return stepNode
 
-	# Returns history array of only the current round
+	# Returns history array of only the current round.
 	cdef uint2       CurrentRoundHist( self ): #noexcept:
 		return self.History[ self.CurrentRoundStart(): ]
 
-	# Calculates & returns current pot size, accounting for allin adjustments
+	# Calculates & returns current pot size, accounting for allin adjustments.
 	cdef uint        PotSize( self ): #noexcept:
 
 		cdef uint  pot=0, s
@@ -568,9 +596,10 @@ cdef class gamenode:
 		for s from self.PDEALS_DONE <= s < self.hLen:
 			e    = self.History[ s ]
 			pot += (e[ BETTOTAL ] - e[ ALLINDIFF ])
+
 		return pot
 
-	# Calls CardOps hand evaluator to score all players' hands; hScores[0] = best-scoring hand
+	# Calls CardOps hand evaluator to score all players' hands; hScores[0] = best hand's score.
 	cdef uint1       HandScores( self ): #noexcept:
 
 		cdef:
@@ -622,7 +651,7 @@ cdef class gamenode:
 		return results
 
 	# Executes game-scoring logic, returns net profit for all players:
-	# Do we need to score hands? Short-circuit if not, else use func above to distribute profits from hScores
+	# Short-circuit if we don't need to score hands, else distribute profits according to hScores
 	# TODO: Generalize to >2pl
 	cdef int1        GameResults( self ): #noexcept:
 
@@ -635,7 +664,7 @@ cdef class gamenode:
 			uint  nActive  = aPlayers.shape[ 0 ], pot = self.PotSize(), unadjustedNet, winner, p
 			int1  results  = pyarr( ARR_TMPLT_i, self.PLAYER_COUNT+1, zero=False )
 
-		# In heads-up, FOLD endgames imply two cases (neither of which require hand scoring):
+		# In heads-up, FOLD endgames imply two possible cases (neither requires hand scoring):
 		# 1) nActive==1: Winner is last man standing. 
 		# 2) nActive==0: Endgame seq must be ALLIN ⟶ FOLD. Winner is the all-in player.
 		if endgame[ TYPE ]==FOLD:
@@ -652,7 +681,7 @@ cdef class gamenode:
 		else: 
 			return self.ShowdownResults( pot, bTotals, stackAdj )
 
-	# Finds best hand the specified player can make, given dealt cards. Returns array of card vecs
+	# Finds best hand the specified player can make, given dealt cards. Returns array of card vecs.
 	cdef uint2       CurrentBestHand( self, uint for_player ): #noexcept:
 
 		cdef uint2 holeCards = self.HoleCards( for_player ),                                                           \
@@ -668,8 +697,11 @@ cdef class gamenode:
 	# Returns ID for who the next deal should go to
 	cdef uint        DealTo( self ): #noexcept: 
 
+		# After pdeals are done, all remaining deals go to board
 		if self.hLen >= self.PDEALS_DONE: 
-			return BOARD # After pdeals are done, all remaining deals go to board
+			return BOARD 
+
+		# If pdeals not done, just return the next player who hasn't gotten all their cards	
 		else:
 			return self.LastCompletedPDeal()+1
 
@@ -678,17 +710,17 @@ cdef class gamenode:
 	cdef gameevent   Deal( self ): #noexcept:
 
 		cdef:
-			bint  Is_AllIn_Deal = self.Awaiting_AllIn_Deal()
-			uint  dealTo        = self.DealTo(), dealType = BOARDDEAL if dealTo==BOARD else PLAYERDEAL
-			uint1 dealCard      = CardOps.Draw( from_deck=self.AvailableDeck() )
+			bint  AllIn_Deal = self.Awaiting_AllIn_Deal()
+			uint  dealTo     = self.DealTo(), dealType = BOARDDEAL if dealTo==BOARD else PLAYERDEAL
+			uint1 dealCard   = CardOps.Draw( from_deck=self.AvailableDeck() )
 
-		return gameevent( eventType=dealType, is_allin=Is_AllIn_Deal, dealTo=dealTo, cDealt=dealCard[ CARD ] )
+		return gameevent( eventType=dealType, Is_AllIn=AllIn_Deal, dealTo=dealTo, cDealt=dealCard[ CARD ] )
 
-	# Just a nice interface for getting some subset of the current node's history
+	# Just a nice interface for getting some subset of the current node's history.
 	cdef uint2       SubHistory( self, uint of_length ): #noexcept:
 		return self.History.copy()[ :of_length ]
 
-	# Orchestrates gamestate evolution: appends new event to current history, returns resulting node
+	# Orchestrates gamestate evolution: appends new event to current history, returns resulting node.
 	cdef gamenode    Successor( self, gameevent e ): #noexcept:
 
 		cdef uint2 newHist    = cyarr( (self.hLen+1, EVEC_SIZE), UINTSIZE, 'I' )
@@ -696,25 +728,27 @@ cdef class gamenode:
 		newHist[ self.hLen ]  = e.to_array()
 		return gamenode( history=newHist, initialConditions=self.InitialConditions() )
 
-	# Counts number of times specified player (defaults to all non-dealer) has had to act 
+	# Counts number of times specified player (defaults to all non-dealer) has had to act .
 	cdef uint        NumDecisionPoints( self, uint for_player=ANY ): #noexcept:
 
 		cdef uint nDecisions=0, s
 
-		if for_player==ANY: # Case for counting total decision points by either non-dealer player
+		# Case for counting total decision points by either non-dealer player
+		if for_player==ANY:
 			for s from self.BLINDS_DONE <= s < self.hLen: 
 				nDecisions += <uint>(self.History[ s,PLAYEDBY ]!=DEALER)
+
 		else:
 			for s from self.BLINDS_DONE <= s < self.hLen: 
 				nDecisions += <uint>(self.History[ s,PLAYEDBY ]==for_player)
 
 		return nDecisions
 
-	# Deprecated way to generate unique node identifier. Don't use this, it's extremely slow.
+	# DEPRECATED: Generates a unique node identifier. Don't use this, it's extremely slow.
 	cdef ll          GTKey_old( self ): #noexcept:
 		return hash( str(NP( self.History,dtype=uintc ).tobytes()) )
 
-	# Generates a unique gamenode identifier - basically just hashes the history array
+	# Much faster manual hashing of history array to generate a unique gamenode ID
 	cdef ll          GTKey( self ): #noexcept:
 
 		cdef:
@@ -745,7 +779,7 @@ cdef class gamenode:
 		return gtKey
 
 	# Just dumps a bunch of info about the current node for human-readable gamestate inspection.
-	cdef void        summary( self, bint compact=0 ): #noexcept:
+	cdef void        summary( self, bint Compact=0 ): #noexcept:
 
 		cdef:
 
@@ -757,7 +791,7 @@ cdef class gamenode:
 				  hCardsP1  = self.HoleCards( for_player=1 ),                                                          \
 				  hCardsP2  = self.HoleCards( for_player=2 ),                                                          \
 				  deck      = self.AvailableDeck(),                                                                    \
-				  printDeck = self.AvailableDeck( include_gaps=TRUE )
+				  printDeck = self.AvailableDeck( Include_Gaps=TRUE )
 			
 			uint1 istacks    = self.InitialStacks[1:],                                                                 \
 				  betTotals  = self.BetTotals(),                                                                       \
@@ -766,11 +800,11 @@ cdef class gamenode:
 				  stacks     = self.CurrentStacks()
 			uint  dSize      = deck.shape[0]
 			
-			str tab       = '\t'*(not compact),                                                                        \
-				bPretty   = ''.join(CardOps.PrettyCardStrings( bCards,compact=TRUE,center=FALSE )),                    \
-				hPrettyP1 = ''.join(CardOps.PrettyCardStrings( hCardsP1,compact=TRUE,center=FALSE )),                  \
-				hPrettyP2 = ''.join(CardOps.PrettyCardStrings( hCardsP2,compact=TRUE,center=FALSE )),                  \
-				dPretty   = '|'.join( CardOps.PrettyCardStrings( printDeck,compact=TRUE,center=FALSE ) ),              \
+			str tab       = '\t'*(not Compact),                                                                        \
+				bPretty   = ''.join(  CardOps.PrettyCardStrings( bCards,    Compact=TRUE, Center=FALSE ) ),            \
+				hPrettyP1 = ''.join(  CardOps.PrettyCardStrings( hCardsP1,  Compact=TRUE, Center=FALSE ) ),            \
+				hPrettyP2 = ''.join(  CardOps.PrettyCardStrings( hCardsP2,  Compact=TRUE, Center=FALSE ) ),            \
+				dPretty   = '|'.join( CardOps.PrettyCardStrings( printDeck, Compact=TRUE, Center=FALSE ) ),            \
 				stepStr, cond
 			
 			list YN      = [ "NO", "YES" ],                                                                            \
@@ -782,7 +816,7 @@ cdef class gamenode:
 
 			str  aPlayer = players[ self.ActingPlayer() ]
 
-		if not compact:
+		if not Compact:
 			print( '\n'+('='*100 ))
 			print( "GAMENODE SUMMARY".center(100) )
 			print( ('='*100)+'\n' )
@@ -835,7 +869,7 @@ cdef class gamenode:
 			print( f"\tGTKey     = {self.GTKey()}" )
 			print( f"\tLastEvent = {self.LastEvent().ShortString()}" )
 
-		if compact: print()
+		if Compact: print()
 		print( tab + ('='*85) )
 		print( tab + f"GAME HISTORY".center(85) )
 		print( tab + ('='*85) )
@@ -852,22 +886,30 @@ cdef class gamenode:
 			list gameResults, winners = []
 			uint winner, nWinners, i
 			str  endStr, resStr
+
 		if self.Is_Terminal():
 			gameResults = list( self.GameResults() )
 			nWinners    = gameResults[1:].count( max(gameResults[1:]) )
 			resStr      = tab + f"Results: {gameResults}".center(85)
+
 			if nWinners == 1: 
 				winner = gameResults[0]
 				endStr = tab + f"GAMEOVER, P{winner} WINS".center(85)
+
 			else:
+
 				for p in self.AllPlayers()[1:]:
-					if gameResults[ p ] == max( gameResults[1:] ): winners.append( p )
+					if gameResults[ p ] == max( gameResults[1:] ): 
+						winners.append( p )
+
 				endStr = tab + f"GAMEOVER, TIE BETWEEN: {winners}".center(85)
+
 			print( tab+('='*85) )
 			print( endStr )
 			print( resStr )
 			print( tab+('='*85) )
-		if not compact: print( ('='*100)+'\n' )
+
+		if not Compact: print( ('='*100)+'\n' )
 		else:           print( ('='*85)+'\n' )
 
 	# More exhaustive than .summary(), prints all fields and outputs of most functions, use for deep debugging.
@@ -876,14 +918,14 @@ cdef class gamenode:
 		cdef:
 			uint  rndStart   = self.CurrentRoundStart(), d
 			uint1 aPlayers   = self.ActivePlayers()
-			uint2 gapDeck    = self.AvailableDeck( include_gaps=TRUE ), allCards = self.AllDealtCards(),               \
+			uint2 gapDeck    = self.AvailableDeck( Include_Gaps=TRUE ), allCards = self.AllDealtCards(),               \
 				  bCards     = self.BoardCards(), h1Cards = self.HoleCards( 1 ), h2Cards = self.HoleCards( 2 ),        \
 				  allInSeq   = self.AllInSequence()
-			str   printDeck  = '|'.join( CardOps.PrettyCardStrings( gapDeck, compact=TRUE,center=FALSE ) ),            \
-				  printBoard =  ''.join( CardOps.PrettyCardStrings( bCards,  compact=TRUE,center=FALSE ) ),            \
-				  printH1    =  ''.join( CardOps.PrettyCardStrings( h1Cards, compact=TRUE,center=FALSE ) ),            \
-				  printH2    =  ''.join( CardOps.PrettyCardStrings( h2Cards, compact=TRUE,center=FALSE ) ),            \
-				  printCards =  ''.join( CardOps.PrettyCardStrings( allCards,compact=TRUE,center=FALSE ) ),            \
+			str   printDeck  = '|'.join( CardOps.PrettyCardStrings( gapDeck, Compact=TRUE,center=FALSE ) ),            \
+				  printBoard =  ''.join( CardOps.PrettyCardStrings( bCards,  Compact=TRUE,center=FALSE ) ),            \
+				  printH1    =  ''.join( CardOps.PrettyCardStrings( h1Cards, Compact=TRUE,center=FALSE ) ),            \
+				  printH2    =  ''.join( CardOps.PrettyCardStrings( h2Cards, Compact=TRUE,center=FALSE ) ),            \
+				  printCards =  ''.join( CardOps.PrettyCardStrings( allCards,Compact=TRUE,center=FALSE ) ),            \
 				  winnerStr
 
 		print( '\n'+('='*100) )
@@ -913,7 +955,7 @@ cdef class gamenode:
 		print( f"AllDealtCards() = ...............{printCards}" )
 		print( f"AvailableDeck() = ...............{printDeck}" )
 		print( f"NumDeals( BOARD ) = .............{self.NumDeals( BOARD )}" )
-		print( f"NumDeals( BOARD,allin=FALSE ) =  {self.NumDeals( to_player=BOARD, include_allin=FALSE )}" )
+		print( f"NumDeals( BOARD,allin=FALSE ) =  {self.NumDeals( to_player=BOARD, Include_AllIn=FALSE )}" )
 		print( f"NumDeals( 1 ) = .................{self.NumDeals( 1 )}" )
 		print( f"NumDeals( 2 ) = .................{self.NumDeals( 2 )}" )
 		print( f"NumFolds() = ....................{self.NumFolds()}" )

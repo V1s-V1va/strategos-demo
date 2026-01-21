@@ -2,6 +2,7 @@
 # cython: language_level 3
 # cython: profile = False
 
+
 from cpython.array cimport clone as pyarr
 from cython.view   cimport array as cyarr
 
@@ -20,23 +21,23 @@ from numpy import asarray as NP, uintc
 # - AllInDiff: If all-in, by how much the bet fell short of min required bet. Useful game logic info.
 # - DealTo:    If deal event, player who card is being dealt to
 # - CDealt:    If deal event, cardID being dealt
-# Basically just a size 8 uint array with some useful utility functions attached to it. We string 
-# these together to form gamenode histories. 
+# Basically just a size 8 uint array with some useful utility functions attached to it. Sequences of
+# these form a game history.
 # ==================================================================================================
 
 
 cdef class gameevent:
 
-	def __init__( gameevent self, uint eventType=NULLEVENT, uint playedBy=0, uint raiseAmt=0, uint betTotal=0, 
-				  uint is_allin=0, uint allInDiff=0, uint dealTo=0, uint cDealt=0, uint1 from_array=None ):
+	def __init__( self, uint eventType=NULLEVENT, uint playedBy=0, uint raiseAmt=0, uint betTotal=0, 
+				  uint Is_AllIn=0, uint allInDiff=0, uint dealTo=0, uint cDealt=0, uint1 from_array=None ):
 
 		if from_array is None:
-			self.__MANUAL_INIT__( eventType, playedBy, raiseAmt, betTotal, is_allin, allInDiff, dealTo, cDealt )
+			self.__MANUAL_INIT__( eventType, playedBy, raiseAmt, betTotal, Is_AllIn, allInDiff, dealTo, cDealt )
 		else:
 			self.__AUTOINIT__( from_array )
 
 	# Initializes from a specifically-structured predefined event array
-	cdef void __AUTOINIT__( gameevent self, uint1 from_array ): #noexcept:
+	cdef void __AUTOINIT__( self, uint1 from_array ): #noexcept:
 
 		self.Type      = from_array[ TYPE ]
 		self.PlayedBy  = from_array[ PLAYEDBY ]
@@ -48,19 +49,19 @@ cdef class gameevent:
 		self.CDealt    = from_array[ CDEALT ]
 
 	# Initializes from manually-specified event parameters
-	cdef void __MANUAL_INIT__( gameevent self, uint eventType, uint playedBy, uint raiseAmt, uint betTotal, 
-							   uint is_allin, uint allInDiff, uint dealTo, uint cDealt ): #noexcept:
+	cdef void __MANUAL_INIT__( self, uint eventType, uint playedBy, uint raiseAmt, uint betTotal, 
+							   uint Is_AllIn, uint allInDiff, uint dealTo, uint cDealt ): #noexcept:
 
 		self.Type      = eventType
 		self.PlayedBy  = playedBy
 		self.RaiseAmt  = raiseAmt
 		self.BetTotal  = betTotal
-		self.Is_AllIn  = is_allin
+		self.Is_AllIn  = Is_AllIn
 		self.AllInDiff = allInDiff
 		self.DealTo    = dealTo
 		self.CDealt    = cDealt
 
-	cdef uint1 to_array( gameevent self ): #noexcept:
+	cdef uint1 to_array( self ): #noexcept:
 
 		cdef uint1 eventArr = pyarr( ARR_TMPLT_I, EVEC_SIZE, zero=False )
 
@@ -75,12 +76,12 @@ cdef class gameevent:
 
 		return eventArr
 
-	# Deprecated. Used to be called for generating unique identifiers from game histories.
-	cdef str   GTString( gameevent self ): #noexcept:
+	# DEPRECATED. Used to be called for generating unique identifiers from game histories.
+	cdef str   GTString( self ): #noexcept:
 		return str( NP( self.to_array() ).tobytes() )
 
 	# Gives us a human-readable string for when we need to manually inspect event details
-	cdef str   ShortString( gameevent self ): #noexcept:
+	cdef str   ShortString( self ): #noexcept:
 
 		cdef uint2 cDealt = cyarr( (1,CVEC_SIZE), UINTSIZE, 'I' )
 		cDealt[ 0 ] = CardVector( self.CDealt ) # Yeah it's dumb but this has to be 2d because reasons
@@ -92,13 +93,14 @@ cdef class gameevent:
 				 dStr = str( self.AllInDiff ).rjust( 4 ),                                                              \
 				 tStr = TYPENAMES[ self.Type ],                                                                        \
 				 cStr = ''.join( PrettyCardStrings( cDealt ) )
+
 		if (self.Type==PLAYERDEAL) and (self.CDealt==0): cStr = '∅∅'
 
 		cdef tuple eData = ( tStr, pStr, rStr, bStr, aStr, dStr, self.DealTo, cStr )
 		return '| |'.join( [f"{label}: {data}" for (label,data) in zip( EKEYS,eData )] )
 
 	# Another inspection function, useful for printing events as part of game histories
-	cdef str   ShorterString( gameevent self, uint stepNum, bint Include_Array=FALSE ): #noexcept:
+	cdef str   ShorterString( self, uint stepNum, bint Include_Array=FALSE ): #noexcept:
 
 		cdef uint2 cDealt = cyarr( (1,CVEC_SIZE), UINTSIZE, 'I' )
 		cDealt[ 0 ] = CardVector( self.CDealt ) # Yeah it's dumb but this has to be 2d because reasons
@@ -152,21 +154,22 @@ cdef class gameevent:
 		eData.append( (' '*6) + '[ ' + ' '.join( arrList ) + ' ]' )
 		return '| |'.join( eData )
 
-	def __eq__( gameevent self, gameevent e ): 
+	def __eq__( self, gameevent e ): 
 		return self.__EQ__( e )
 
-	cdef bint __EQ__( gameevent self, gameevent e ): #noexcept:
+	cdef bint __EQ__( self, gameevent e ): #noexcept:
 
 		cdef uint1 e1 = self.to_array(), e2 = e.to_array()
 		cdef uint  i
 
 		for i from 0 <= i < EVEC_SIZE:
-			if e1[ i ] != e2[ i ]: return FALSE
+			if e1[ i ] != e2[ i ]: 
+				return FALSE
 
 		return TRUE
 
 
-# Returns an array of non-raise actions which can be indexed using etypes
+# Returns an array of non-raise actions, can be indexed using etypes
 # Useful for building sets of available player actions
 cdef uint2 AllNonRaises( uint player, uint callAmt=0, bint allin_call=0, uint callDiff=0 ): #noexcept:
 
@@ -175,7 +178,7 @@ cdef uint2 AllNonRaises( uint player, uint callAmt=0, bint allin_call=0, uint ca
 	nonRaises[ NULLEVENT ] = gameevent( NULLEVENT ).to_array()
 	nonRaises[ FOLD ]      = gameevent( FOLD,  p ).to_array()
 	nonRaises[ CHECK ]     = gameevent( CHECK, p ).to_array()
-	nonRaises[ CALL ]      = gameevent( CALL,  p, betTotal=callAmt, is_allin=allin_call, allInDiff=callDiff ).to_array()
+	nonRaises[ CALL ]      = gameevent( CALL,  p, betTotal=callAmt, Is_AllIn=allin_call, allInDiff=callDiff ).to_array()
 	return nonRaises
 
 cdef inline bint  Is_Dealer_Action( uint1 e ): #noexcept:
@@ -183,5 +186,6 @@ cdef inline bint  Is_Dealer_Action( uint1 e ): #noexcept:
 
 cdef inline bint  Is_Null( uint1 e ): #noexcept:
 	return e[ TYPE ]==NULLEVENT
+
 
 # *-* # 

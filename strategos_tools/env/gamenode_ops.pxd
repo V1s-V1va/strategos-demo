@@ -1,6 +1,7 @@
 #distutils: language = c
 #cython: language_level 3
 
+
 cimport cython
 
 cimport numpy as cnp
@@ -26,15 +27,15 @@ cdef class gamenode:
 
 	cdef gameevent LastEvent( self, uint from_point=*, uint of_type=* ) #noexcept
 
-	cdef uint2     HoleCards( self, uint for_player, bint fill_to_max=* ) #noexcept
+	cdef uint2     HoleCards( self, uint for_player, bint Fill_To_Max=* ) #noexcept
 
-	cdef uint2     BoardCards( self, bint fill_to_max=* ) #noexcept
+	cdef uint2     BoardCards( self, bint Fill_To_Max=* ) #noexcept
 
-	cdef uint2     AllDealtCards( self, bint validate=* ) #noexcept
+	cdef uint2     AllDealtCards( self, bint Validate=* ) #noexcept
 
-	cdef uint2     AvailableDeck( self, bint include_gaps=*, bint validate=* ) #noexcept
+	cdef uint2     AvailableDeck( self, bint Include_Gaps=*, bint Validate=* ) #noexcept
 
-	cdef uint      NumDeals( self, uint to_player=*, bint include_allin=* ) #noexcept
+	cdef uint      NumDeals( self, uint to_player=*, bint Include_AllIn=* ) #noexcept
 
 	cdef uint      NumFolds( self ) #noexcept
 
@@ -84,7 +85,7 @@ cdef class gamenode:
 
 	cdef uint      ActingPlayer( self, uint at_point=* ) #noexcept
 
-	cdef gamenode  ParentNode( self, bint include_deals=* ) #noexcept
+	cdef gamenode  ParentNode( self, bint Include_Deals=* ) #noexcept
 
 	cdef uint2     CurrentRoundHist( self ) #noexcept
 
@@ -116,7 +117,7 @@ cdef class gamenode:
 
 	cdef ll        GTKey( self ) #noexcept
 
-	cdef void      summary( self, bint compact=* ) #noexcept
+	cdef void      summary( self, bint Compact=* ) #noexcept
 
 	cdef void      DIAGNOSTIC( self ) #noexcept
 

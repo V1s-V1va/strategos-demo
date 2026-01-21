@@ -2,6 +2,7 @@
 # cython: language_level 3
 # cython: profile = False
 
+
 cimport cython
 from libc.string   cimport memcpy, memset
 from cpython.array cimport clone as pyarr
@@ -33,34 +34,38 @@ cdef class infoset:
 		self.hLen      = sourceNode.hLen
 		self._n        = sourceNode
 
-	# Returns an array describing the game's initial conditions
+	# Returns an array describing the game's initial conditions.
 	cdef uint1     InitialConditions( self ): #noexcept:
 		return self._n.InitialConditions()
 
-	# Returns last event from hist; start-point and type-filter options. Auto redacts hidden information
+	# Returns last event from hist; start-point and type-filter options. Auto redacts hidden info.
 	cdef gameevent LastEvent( self, uint from_point=0, uint of_type=NULLEVENT ): #noexcept:
 
 		cdef gameevent lastEvent = self._n.LastEvent( from_point, of_type )
-		if not lastEvent.DealTo == self.OPPplayer:
-			return lastEvent # No hidden information to remove here
 
+		# No hidden information to remove here
+		if not lastEvent.DealTo == self.OPPplayer:
+			return lastEvent 
+
+		# By now we know that lastEvent is an opp deal, so redact the dealt cards
 		cdef uint1 eArr = lastEvent.to_array()
-		eArr[ CDEALT ]=0 # By now we know that lastEvent is an opp deal, so redact the dealt cards
+		eArr[ CDEALT ]=0 
+
 		return gameevent( from_array=eArr )
 
-	# Just counts number of deal events that have occurred
+	# Just counts number of deal events that have occurred.
 	cdef uint      NumDeals( self ): #noexcept:
 		return self._n.NumDeals()
 
-	# Returns array of all player IDs in game, regardless of player active state
+	# Returns array of all player IDs in game, regardless of player active state.
 	cdef uint1     AllPlayers( self ): #noexcept:
 		return self._n.AllPlayers()
 
-	# Returns array of all players who are still able to act (i.e. are not folded or all-in)
+	# Returns array of all players who are still able to act (i.e. are not folded or all-in).
 	cdef uint1     ActivePlayers( self ): #noexcept:
 		return self._n.ActivePlayers()
 
-	# Returns ID of player expected to act now
+	# Returns ID of player expected to act now.
 	cdef uint      ActingPlayer( self, uint at_point=0 ): #noexcept:
 		return self._n.ActingPlayer( at_point )
 
@@ -68,23 +73,23 @@ cdef class infoset:
 	cdef bint      POV_Is_Acting_Player( self ): #noexcept:
 		return self.POVplayer == self.ActingPlayer()
 
-	# Sometimes useful to know how many players are active without needing to know who they are
+	# Sometimes useful to know how many players are active without needing to know who they are.
 	cdef uint      NumActivePlayers( self ): #noexcept:
 		return self._n.NumActivePlayers()
 
-	# Returns array of the POV player's private card vecs
-	cdef uint2     HoleCards( self, bint fill_to_max=FALSE ): #noexcept:
-		return self._n.HoleCards( self.POVplayer, fill_to_max )
+	# Returns array of the POV player's private card vecs.
+	cdef uint2     HoleCards( self, bint Fill_To_Max=FALSE ): #noexcept:
+		return self._n.HoleCards( self.POVplayer, Fill_To_Max )
 
-	# Returns array of board card vecs
-	cdef uint2     BoardCards( self, bint fill_to_max=FALSE ): #noexcept:
-		return self._n.BoardCards( fill_to_max )
+	# Returns array of board card vecs.
+	cdef uint2     BoardCards( self, bint Fill_To_Max=FALSE ): #noexcept:
+		return self._n.BoardCards( Fill_To_Max )
 
-	# Returns history index where the current betting round started
+	# Returns history index where the current betting round started.
 	cdef uint      CurrentRoundStart( self ): #noexcept:
 		return self._n.CurrentRoundStart()
 
-	# Returns subhistory consisting of just the current betting round with hidden information redacted
+	# Returns subhistory consisting of just the current betting round with any hidden info redacted.
 	cdef uint2     CurrentRoundHist( self ): #noexcept:
 
 		# If current round doesn't include opp deals, nothing to redact, just return true history
@@ -95,17 +100,15 @@ cdef class infoset:
 				   subjRoundHist = cyarr( (trueRoundHist.shape[ 0 ], EVEC_SIZE), UINTSIZE, 'I' )
 		cdef uint  roundLength   = subjRoundHist.shape[ 0 ], s
 
-		# Since we know we're preflop, make sure any opponent deals are redacted
+		# Since we know we're preflop now, make sure any opponent deals are redacted
 		for s from 0 <= s < roundLength: 
 			subjRoundHist[ s ] = trueRoundHist[ s ] 
 			if trueRoundHist[ s,DEALTO ] == self.OPPplayer: 
 				subjRoundHist[ s,CDEALT ] = 0
-			# memcpy( &subjRoundHist[ s,0 ], &trueRoundHist[ s,0 ], EVEC_BYTES ) # SLICING REPLACEMENT
-			# if trueRoundHist[ s ][ DEALTO ]==self.OPPplayer: memset( &subjRoundHist[ s,CDEALT ], 0, CVEC_BYTES )
 
 		return subjRoundHist
 
-	# Returns current betting round ID
+	# Returns current betting round ID.
 	cdef uint      CurrentStreet( self ): #noexcept:
 		return self._n.CurrentStreet()
 
@@ -117,7 +120,7 @@ cdef class infoset:
 	cdef bint      Players_Have_Acted( self ): #noexcept:
 		return self._n.Players_Have_Acted( players=self.ActivePlayers(), from_point=self.CurrentRoundStart() )
 
-	# Calculates total amount each player has put into the pot, option to start from a specific history step
+	# Calculates total each player has put into pot, option to start from a specific history step
 	cdef uint1     BetTotals( self, uint from_point=1 ): #noexcept:
 		return self._n.BetTotals( from_point )
 
@@ -125,9 +128,9 @@ cdef class infoset:
 	cdef bint      Current_Round_Over( self ): #noexcept:
 		return self._n.Current_Round_Over()
 
-	# Gets a specified player's current total stack, defaults to POV player
+	# Gets a specified player's current total stack, defaults to POV player.
 	cdef uint      CurrentStack( self, uint for_player=0 ): #noexcept:
-		return self._n.CurrentStacks()[ for_player if for_player>0 else self.POVplayer ]
+		return self._n.CurrentStacks()[ for_player if (for_player > 0) else self.POVplayer ]
 
 	# Is the POV player posting a blind?
 	cdef uint      Is_Posting_Blind( self ): #noexcept:
@@ -145,11 +148,11 @@ cdef class infoset:
 			
 		return FALSE
 
-	# Indicates whether current game position is the first player action after blinds have been posted
+	# Indicates whether current game position is the first player action after blinds have been posted.
 	cdef bint      Is_First_Action( self ): #noexcept:
 		return self.hLen==self._n.BLINDS_DONE
 
-	# Calculates POV player's min required bet (i.e. CALL) amount at the current game position
+	# Calculates POV player's min required bet (i.e. CALL) amount at the current game position.
 	cdef uint      CallAmount( self ): #noexcept:
 
 		# Find player with most in round's pot ⟶ find how much POVplayer needs to put in to match it
@@ -162,7 +165,7 @@ cdef class infoset:
 			
 		return amtToMatch - POVBetTotal
 
-	# Calculates the minimum raise the POV player is allowed to do
+	# Calculates the minimum raise the POV player is allowed to do.
 	cdef uint      MinRaise( self ): #noexcept:
 
 		# We just treat blinds as raises where the raise amt is determined by the blind being posted
@@ -170,7 +173,7 @@ cdef class infoset:
 		if Posting_Blind==SB: 
 			return self._n.SmallBlindAmt
 		if Posting_Blind==BB:
-			return self._n.BigBlindAmt - self._n.SmallBlindAmt # This as raiseAmt gives BetTotal = BBamt
+			return self._n.BigBlindAmt - self._n.SmallBlindAmt # This raiseAmt gives BetTotal = BBamt
 
 		cdef:
 			uint      currentRound    = self.CurrentStreet(),                                                          \
@@ -178,10 +181,10 @@ cdef class infoset:
 			gameevent lastRoundRaise  = self.LastEvent( from_point=roundStart, of_type=RAISE )
 			bint      First_Round_Bet = lastRoundRaise.Type==NULLEVENT
 
-		# Typical logic: Must raise >= much as prev existing raise; if none exists, then min is BB
+		# Typical logic: Must raise ≥ prev existing raise; if none exists, then min is BB
 		return lastRoundRaise.RaiseAmt if (not First_Round_Bet) else self._n.BigBlindAmt
 
-	# Calculates maximum POV player raise allowed by stack/blind limitations
+	# Calculates maximum POV player raise allowed by stack/blind limitations.
 	cdef uint      MaxRaise( self ): #noexcept:
 
 		# Blinds just treated as raises where the raise amt is determined by the blind being posted
@@ -189,13 +192,13 @@ cdef class infoset:
 		if Posting_Blind==SB: 
 			return self._n.SmallBlindAmt
 		if Posting_Blind==BB: 
-			return self._n.BigBlindAmt - self._n.SmallBlindAmt
+			return self._n.BigBlindAmt - self._n.SmallBlindAmt # This raiseAmt gives BetTotal = BBamt
 
 		# Not posting blind, so max raise = amount by which POV current stack exceeds call amt
 		cdef uint minTotalBet = self.CallAmount(), currentStack = self.CurrentStack()
 		return 0 if currentStack <= minTotalBet else currentStack - minTotalBet
 
-	# Just gets current total pot size
+	# Just gets current total pot size.
 	cdef uint      PotSize( self ): #noexcept:
 		return self._n.PotSize()
 
@@ -203,7 +206,7 @@ cdef class infoset:
 	cdef bint      Is_Terminal( self ): #noexcept:
 		return self._n.Is_Terminal()
 
-	# Returns hist steps where cards were dealt to to_player; useful for counterfactual stuff
+	# Returns hist steps where cards were dealt to to_player; util for counterfactual stuff downstream.
 	cdef uint1     DealSteps( self, uint to_player=ANY ): #noexcept:
 
 		cdef uint  nDeals    = MAX_DEALT_CARDS if to_player==ANY else MAX_HOLE_CARDS, d=0, s
@@ -222,11 +225,11 @@ cdef class infoset:
 
 		return dealSteps
 
-	# Gets the unique integer identifier for the POV player's current hand
+	# Gets the unique ID for POV player's hand; util for ordering counterfactual histories downstream.
 	cdef uint      HandIndex( self ): #noexcept:
 		return CardOps.HandIndex( self.HoleCards() )
 
-	# Returns array of all cards currently observable to POVplayer (i.e. own hcards + any dealt bcards)
+	# Returns arr of all cards currently observable to POVplayer (i.e. own hcards + any dealt bcards).
 	cdef uint2     ObservableCards( self ): #noexcept:
 
 		cdef:
@@ -239,7 +242,7 @@ cdef class infoset:
 		
 		return allCards
 
-	# Returns game history with dealt cards redacted from opponent deal events
+	# Returns game history with dealt cards redacted from opponent deal events.
 	cdef uint2     ObservableHistory( self ): #noexcept:
 
 		cdef uint2 obHist = self._n.History.copy()
@@ -251,7 +254,7 @@ cdef class infoset:
 
 		return obHist
 
-	# Uses relations between current stack, call, and raise limits to calc number of possible raises
+	# Uses relations between current stack, call, and raise limits to calc number of possible raises.
 	cdef uint    __NumAvailableRaises( self, uint currentStack, uint currentCall ): #noexcept:
 
 		# poor
@@ -270,7 +273,7 @@ cdef class infoset:
 		if currentStack > minRaiseTotal:
 			return (maxRaise - minRaise) + 1
 
-	# Calculates the total number of actions available to POVplayer at the current game position
+	# Calculates the total number of actions available to POVplayer at the current game position.
 	cdef uint      NumAvailableActions( self ): #noexcept:
 	
 		if not self.POV_Is_Acting_Player(): 
@@ -291,7 +294,7 @@ cdef class infoset:
 
 		return nRaises + (<uint>Can_Fold + <uint>Can_Check + <uint>Can_Call)
 
-	# Returns an array containing all possible hands the opponent could be holding
+	# Returns an array containing all possible hands the opponent could be holding.
 	# TODO: Generalize to >2pl, will require adding an arg specifying which opponent
 	cdef uint3     PossibleOppHands( self ): #noexcept:
 
@@ -310,7 +313,7 @@ cdef class infoset:
 
 		return oppHands[ :h ]
 
-	# Does the same thing as PossibleOppHands except returns array of hand inds instead of cardVecs
+	# Does the same thing as PossibleOppHands except returns array of hand inds instead of cardVecs.
 	# TODO: Generalize to >2pl, will require adding an arg specifying which opponent
 	cdef uint1     PossibleOppHandInds( self ): #noexcept:
 
@@ -326,7 +329,7 @@ cdef class infoset:
 
 		return hInds[ :h ]
 
-	# Returns array containing all possible opp-perspective histories corresponding to possible opp hands
+	# Returns arr containing all possible opp-perspective histories corresponding to possible opp hands.
 	# TODO: Generalize to >2pl - array will be huge since num of combinations for >2 opponents will be massive
 	cdef uint3     PossibleOppHistories( self ): #noexcept:
 
@@ -347,15 +350,19 @@ cdef class infoset:
 
 		return possibleH
 
-	# Outputs a pydict containing state information; used for serializing game trajectory data
+	# Outputs a pydict containing state information; used for serializing game trajectory data.
 	cdef dict      to_dict( self ): #noexcept:
 
 		cdef uint1 iConds = self._n.InitialConditions().copy()
 		cdef uint2 H      = self._n.History.copy()
-		return { 'POV': self.POVplayer, 'InitConds': NP( iConds,dtype=uintc ), 'gHist': NP( H,dtype=uintc ) }
+		return {
+			'POV':       self.POVplayer,
+			'InitConds': NP( iConds,dtype=uintc ),
+			'gHist':     NP( H,dtype=uintc )
+		}
 
-	# Just dumps a bunch of info about the current infoset for human-readable gamestate inspection
-	cdef void      summary( self, bint append_to_node_summary=0 ): #noexcept:
+	# Just dumps a bunch of info about the current infoset for human-readable gamestate inspection.
+	cdef void      summary( self, bint Append_To_Node_Summary=FALSE ): #noexcept:
 
 		cdef:
 			uint      rStart   = self.CurrentRoundStart(), blind = self.Is_Posting_Blind(), s, c
@@ -368,7 +375,7 @@ cdef class infoset:
 				      blindStr = BLINDSTATES[ blind ]
 			gameevent lRaise   = self.LastEvent( from_point=rStart,of_type=RAISE ), stepEvent
 
-		if not append_to_node_summary:
+		if not Append_To_Node_Summary:
 			print( '\n'+('='*100 ))
 			print( f"P{self.POVplayer} INFOSET SUMMARY".center(100) )
 			print( '='*100 )		
@@ -412,14 +419,14 @@ cdef class infoset:
 					print( f"\t{str( s ).rjust(6)}| |" + f"++ CURRENT STEP - ACTION NOT YET CHOSEN ++".center(74) )
 			print()
 
-		if append_to_node_summary:
+		if Append_To_Node_Summary:
 			print( f"\n\tAS OBSERVED BY PLAYER {PLAYERNAMES[ self.POVplayer ]}:" )
 			for s from 0 <= s < self.hLen:
 				stepEvent = gameevent( from_array=subjHist[ s ] )
 				print( f"\t{stepEvent.ShorterString(s)}" )
 
 
-	# Reconstructs an infoset object from a saved pydict
+	# Reconstructs an infoset object from a saved pydict.
 	@staticmethod
 	cdef infoset from_dict( dict Idict ): #noexcept:
 

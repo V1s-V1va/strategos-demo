@@ -1,12 +1,14 @@
 #distutils: language = c
 #cython: language_level 3
 
+
 cimport cython
 from cython.view cimport array as cyarr
 
 from strategos_tools.core.CONSTS cimport *
 from strategos_tools.env.event_ops cimport gameevent
 from strategos_tools.env.gamenode_ops cimport gamenode
+
 
 cdef class infoset:
 
@@ -32,9 +34,9 @@ cdef class infoset:
 
 	cdef uint      NumActivePlayers( self ) #noexcept
 
-	cdef uint2     HoleCards( self, bint fill_to_max=* ) #noexcept
+	cdef uint2     HoleCards( self, bint Fill_To_Max=* ) #noexcept
 
-	cdef uint2     BoardCards( self, bint fill_to_max=* ) #noexcept
+	cdef uint2     BoardCards( self, bint Fill_To_Max=* ) #noexcept
 
 	cdef uint      CurrentRoundStart( self ) #noexcept
 
@@ -86,7 +88,7 @@ cdef class infoset:
 
 	cdef dict      to_dict( self ) #noexcept
 
-	cdef void      summary( self, bint append_to_node_summary=* ) #noexcept
+	cdef void      summary( self, bint Append_To_Node_Summary=* ) #noexcept
 
 	@staticmethod
 	cdef infoset   from_dict( dict Idict ) #noexcept

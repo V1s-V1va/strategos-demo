@@ -29,7 +29,7 @@ cdef int1  DeuceInts( uint2 cardVecs ) #noexcept
 
 cdef uint2 VecDeck() #noexcept
 
-cdef uint2 FilteredDeck( uint2 excludeCards, bint include_gaps=* ) #noexcept
+cdef uint2 FilteredDeck( uint2 excludeCards, bint Include_Gaps=* ) #noexcept
 
 cdef uint1 Draw( uint2 from_deck ) #noexcept
 
@@ -43,7 +43,7 @@ cdef ll    HandProduct( uint2 hand ) #noexcept
 
 cdef uint  HandIndex( uint2 hand ) #noexcept
 
-cdef list  PrettyCardStrings( uint2 cardVecs, bint compact=*, bint center=* ) #noexcept
+cdef list  PrettyCardStrings( uint2 cardVecs, bint Compact=*, bint Center=* ) #noexcept
 
 cdef uint2 BestHand( uint2 holeCards, uint2 boardCards ) #noexcept
 
@@ -62,5 +62,6 @@ cdef uint2 find_three_of_a_kind( uint2 fullHand, uint2 holeCards ) #noexcept
 cdef uint2 find_four_of_a_kind( uint2 fullHand, uint2 holeCards ) #noexcept
 
 cdef uint2 find_winning_cards( uint2 from_winning_hand, uint2 with_hole_cards, str of_rank_class ) #noexcept
+
 
 # *-* #

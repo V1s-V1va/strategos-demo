@@ -2,6 +2,7 @@
 # cython: language_level 3
 # cython: profile = False
 
+
 cimport cython
 from cpython.array cimport clone as pyarr
 from cython.view   cimport array as cyarr
@@ -13,10 +14,10 @@ from numpy import asarray as NP, uintc
 
 
 # ==================================================================================================
-# An actionset is exactly what it sounds like: A(I) is the set of actions availble to I.POVplayer
+# An actionset is exactly what it sounds like: A(I) is the set of actions available to I.POVplayer
 # at infoset I. This class just takes an infoset I on init, goes through a bunch of poker logic to
 # determine what actions are availble, then stores determined action boundary conditions in a way
-# that allows us to construct available actions as we need them on the fly, instead of storing huge
+# that allows us to generate available actions as we need them on the fly, instead of storing huge
 # arrays of all actions themselves. Actions are generated/retrieved using an indexing system.
 # ==================================================================================================
 
@@ -26,7 +27,7 @@ cdef class actionset:
 	def __init__( self, infoset I ): 
 		self.__INIT__( I )
 
-	# Determines basic boundary conditions on available actions & calls helpers to fill out details
+	# Determines basic boundary conditions on available actions & calls helpers to fill out details.
 	cdef void        __INIT__( self, infoset I ): #noexcept:
 	
 		self._I = I
@@ -49,9 +50,10 @@ cdef class actionset:
 			self.__find_available_raises()
 			self.size = self.NumNonRaises + self.NumRaises
 
-	# Builds explicit array of available non-raise actions (stored explicitly since there aren't many of them)
+	# Builds explicit array of available non-raise actions (there aren't many of them, just store explicitly).
 	cdef void        __find_available_nonraises( self ): #noexcept:
 
+		# First define some constraining conditions on available actions
 		cdef:
 			bint      Pre_Flop       = self._I.CurrentStreet()==PREFLOP 
 			uint      roundStart     = self._I.CurrentRoundStart() if (not Pre_Flop) else self._I._n.BLINDS_DONE 
@@ -59,16 +61,16 @@ cdef class actionset:
 			bint      Betting_Opened = lastBet.Type!=NULLEVENT,                                                        \
 					  First_Action   = self._I.Is_First_Action()
 
-		# Which nonraise actions are available to us?
+		# Now, which nonraise actions are available to us?
 		self.Can_Fold  = (self.Posting_Blind==FALSE) and ((Betting_Opened==TRUE) or (First_Action==TRUE))
 		self.Can_Check = (self.Posting_Blind==FALSE) and (self.MatchCall==0)
 		self.Can_Call  = (self.Posting_Blind==FALSE) and (self.Can_Check==FALSE) and (self.CurrentStack>0)
 
 		# Determine specific properties of available nonraises
 		cdef:
-			bint  Call_In     = self.CurrentStack <= self.MatchCall # Would we have to have to go all-in to call?
+			bint  Call_In     = self.CurrentStack <= self.MatchCall # Would a call require us to go all-in?
 			uint  callAmt     = self.MatchCall if (not Call_In) else self.CurrentStack,                                \
-				  calldiff    = self.MatchCall - self.CurrentStack if (Call_In==TRUE) else 0
+				  calldiff    = self.MatchCall - self.CurrentStack if Call_In else 0
 			uint2 nonRaises   = AllNonRaises( self.Player, callAmt, Call_In, calldiff ),                               \
 				  availableNR = cyarr( (NON_RAISE_ETYPES, EVEC_SIZE), UINTSIZE, 'I' )
 			uint  n=0
@@ -84,11 +86,11 @@ cdef class actionset:
 			availableNR[ n ] = nonRaises[ CALL ]
 			n+=1
 
-		self.CheckCallIdx = <uint>self.Can_Fold # If we can fold, aIdx of CHECK/CALL will be 1, else will be 0
+		self.CheckCallIdx = <uint>self.Can_Fold # Idx of CHECK/CALL = 1 if fold is available, else 0
 		self.NonRaises    = availableNR[ :n ]
 		self.NumNonRaises = n
 
-	# Uses diff between stack & min bet to find range of available raises
+	# Uses diff between stack & min bet to find range of available raises.
 	cdef void        __find_available_raises( self ): #noexcept:
 
 		# Only FOLD/CALL allowed as responses to all-ins
@@ -104,10 +106,10 @@ cdef class actionset:
 		else: 
 			self.NumRaises = 0
 
-	# Gets action at aIdx: if nonraise, return stored array, else generate raise event using aIdx offset
+	# Gets action at aIdx: if nonraise, return stored array, else generate raise event using aIdx offset.
 	cdef gameevent     at( self, uint aIdx ): #noexcept:
 	
-		# Already have nonraise event arrs stored, so just generate gameevent from one
+		# Already have nonraise event arrs stored, so just construct gameevent from one
 		if aIdx < self.NumNonRaises:
 			return gameevent( from_array=self.NonRaises[ aIdx ] )
 
@@ -117,13 +119,15 @@ cdef class actionset:
 				  rAmt   = self.MinRaise + rIdx if (not All_In) else self.CurrentStack - self.MatchCall,               \
 				  bTot   = rAmt + self.MatchCall # if All_In this is just self.CurrentStack...duh
 
-		return gameevent( eventType=RAISE, playedBy=self.Player, raiseAmt=rAmt, betTotal=bTot, is_allin=All_In )
+		return gameevent( eventType=RAISE, playedBy=self.Player, raiseAmt=rAmt, betTotal=bTot, Is_AllIn=All_In )
 
+	# Helper for finding the Aset index of a given raise, just uses total bet offset from minraise.
 	cdef inline uint __get_raise_aIdx( self, uint from_total_bet ): #noexcept:
 
 		cdef uint raiseAmt = from_total_bet - self.MatchCall, raiseIdx = raiseAmt - self.MinRaise
 		return self.NumNonRaises + raiseIdx
 
+	# Useful util func downstream when we need the Aset index of some observed action.
 	cdef inline uint   index_of( self, gameevent e ): #noexcept:
 
 		if e.Type!=RAISE: 
@@ -132,7 +136,7 @@ cdef class actionset:
 		if e.Type==RAISE: 
 			return self.__get_raise_aIdx( from_total_bet=e.BetTotal )
 
-	# Just gives a full matrix representation of A. If A.size=0, AMat.shape=(0,EVEC_SIZE), god help you
+	# Returns A as a matrix of event arrays. If A.size=0, AMat.shape=(0,EVEC_SIZE). God help you.
 	cdef uint2         AMat( self ): #noexcept:
 	
 		cdef uint  mSize = self.size or 1, a
@@ -141,12 +145,12 @@ cdef class actionset:
 		for a from 0 <= a < self.size: 
 			AMat[ a ] = self.at( a ).to_array()
 
-		return AMat[ :self.size ] # self.size==0 isn't actually a problem here
+		return AMat[ :self.size ] # self.size==0 isn't actually a problem here, neat
 
 	cdef gamenode      SourceNode( self ): #noexcept:
 		return self._I._n
 
-	# Returns str like: "A = { NONRAISES: [ FOLD | CALL $CAMT ] || RAISERANGE: [ $RAMT($BTOT) | $RAMT($BTOT) ] }"
+	# str like: "A = { NONRAISES: [ FOLD | CALL $CAMT ] || RAISERANGE: [ $RAMT($BTOT) | $RAMT($BTOT) ] }"
 	cdef str           inline_summary( self ): #noexcept:
 
 		cdef:
@@ -180,7 +184,7 @@ cdef class actionset:
 			gameevent minRaise =                                                                                       \
 				gameevent( RAISE, playedBy=P, raiseAmt=self.MinRaise, betTotal=minRAmt )
 			gameevent maxRaise =                                                                                       \
-				gameevent( RAISE, playedBy=P, raiseAmt=self.MaxRaise, betTotal=maxRAmt, is_allin=All_In )
+				gameevent( RAISE, playedBy=P, raiseAmt=self.MaxRaise, betTotal=maxRAmt, Is_AllIn=All_In )
 
 		print( '\n\t'+('='*50 ) )
 		print( '\t' + f"P{self.Player} ACTIONSET SUMMARY".center(50) )
