@@ -12,6 +12,13 @@ from cython.view   cimport array as cyarr
 from numpy import asarray as NP, uintc
 
 
+# ==================================================================================================
+# Various named constant quantities useful throughout strategos's code. These all live in the same
+# place so it's easy to make sure we always import what we need. Nothing here is particularly
+# heavyweight anyway, so importing it all even when we only need part of it isn't a big deal.
+# ==================================================================================================
+
+
 # ----- UNIVERSAL CONSTS ---------------------------------------------------------------------------
 
 

@@ -6,7 +6,13 @@ from libc.stdlib cimport malloc, realloc, free
 from libc.string cimport memcpy, memset
 
 
-# Lightweight, very fast custom int vector class. Equipped with specific functionality we need downstream.
+# ==================================================================================================
+# This is just a bunch of lightweight, very fast custom containers equipped with specific 
+# functionality we need downstream. There's nothing fancy here, these are bare-bones, manually
+# managed numeric containers which exist to give us basic storage without incurring Python overhead.
+# ==================================================================================================
+
+
 cdef class vector_int:
 
 	# No python-level entities used here, only C-level init needed
@@ -122,7 +128,7 @@ cdef class vector_int:
 		if self._data is not NULL: 
 			free( self._data )
 
-# Lightweight, very fast custom dbl vector class. Equipped with specific functionality we need downstream.
+
 cdef class vector_dbl:
 
 	# No python-level entities used here, only C-level init needed
@@ -238,7 +244,7 @@ cdef class vector_dbl:
 		if self._data is not NULL: 
 			free( self._data )
 
-# Lightweight, very fast custom long int vector class. Equipped with specific functionality we need downstream.
+
 cdef class vector_ll:
 
 	# No python-level entities used here, only C-level init needed
@@ -353,7 +359,6 @@ cdef class vector_ll:
 			free( self._data )
 
 
-# Lightweight, very fast custom str vector class. Equipped with specific functionality we need downstream.
 cdef class vector_str:
 
 	# Init C-level entities
@@ -408,7 +413,6 @@ cdef class vector_str:
 			free( self._data )
 
 
-# Lightweight, very fast custom 2d int matrix class. Equipped with specific functionality we need downstream.
 cdef class matrix_int:
 	
 	# No python-level entities used here, only C-level init needed
@@ -438,7 +442,6 @@ cdef class matrix_int:
 			free( self._data )
 
 
-# Lightweight, very fast custom 2d float matrix class. Equipped with specific functionality we need downstream.
 cdef class matrix_flt:
 	
 	# No python-level entities used here, only C-level init needed
@@ -469,7 +472,6 @@ cdef class matrix_flt:
 			free( self._data )
 
 
-# Lightweight, very fast custom 2d dbl matrix class. Equipped with specific functionality we need downstream.
 cdef class matrix_dbl:
 	
 	# No python-level entities used here, only C-level init needed
@@ -500,7 +502,7 @@ cdef class matrix_dbl:
 			free( self._data )
 
 
-# Lightweight, very fast custom 3d float array class. Equipped with specific functionality we need downstream.
+# Basically a 3d float array class; we treat this like a container which stores flt matrices.
 cdef class MultiMat:
 	
 	# No python-level entities used here, only C-level init needed
