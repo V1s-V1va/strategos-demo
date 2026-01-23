@@ -1,10 +1,7 @@
-t
-
-
-
 #distutils: language = c
 #cython: language_level 3
 #cython: profile = False
+
 
 cimport cython
 cimport numpy as cnp
@@ -223,15 +220,15 @@ cdef void  _post_iter_cleanup( uint for_iter ): #noexcept:
 	cdef:
 		list allFiles  = listdir( SEG_ADV_DIR ) # No longer need this segmented training data
 		uint nSegments = <uint>len( allFiles ), s
-		str  segFile
+		str  segmentFile
 
-	print( f"\nDoing final cleanup of iteration {for_iter} temp data..." )
+	print( f"\nCleaning up iteration {for_iter} temp data..." )
 	print( f"Destroying {nSegments} temp segmented adv files from dir: {cwd()+'/'+SEG_ADV_DIR}..." )
 
 	for s from 1 <= s <= nSegments:
-		segFile = SEG_ADV_DIR
-		destroy( segFile )
-		print( f"\n\tSegAdv file {cwd()+'/'+segFile} destroyed." )
+		segmentFile = SEG_ADV_DIR + allFiles[ s-1 ]
+		destroy( segmentFile )
+		print( f"\n\tSegAdv file {cwd() + '/' + segmentFile} destroyed." )
 
 	print( f"\nFINAL SEGMENTED DATA CLEANUP COMPLETE. Ready to commence iter {for_iter+1}." )
 	
@@ -288,5 +285,5 @@ def get_current_iter( metaFile ):
 def post_iter_cleanup( for_iter ):
 	_post_iter_cleanup( for_iter )
 
-#print( '\033[3m' + "IO OPS LOADED" + '\033[0m' )
+	
 # *-* #

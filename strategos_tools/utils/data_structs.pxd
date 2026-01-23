@@ -1,6 +1,7 @@
 #distutils: language = c
 #cython: language_level 3
 
+
 cimport cython
 cimport numpy as cnp
 cnp.import_array()
@@ -113,6 +114,7 @@ cdef class advmap:
 	@staticmethod
 	cdef advmap from_dict( dict advdict ) #noexcept
 
+
 cdef class DataBatch:
 	
 	cdef public uint   size
@@ -124,6 +126,7 @@ cdef class DataBatch:
 	                          uint1 tCc, uint1 tCr, uint1 tCs,
 	                          uint1 rCc, uint1 rCr, uint1 rCs,
 	                          uint2 A,   flt1 V,    uint1 W,   uint2 M, str GPU ) #noexcept
+
 
 cdef class DATAMACHINE:
 
@@ -176,6 +179,7 @@ cdef class DATAMACHINE:
 
 	cdef DataBatch _get_batch( self, uint bIdx ) #noexcept
 
+
 cdef class CFR_metadata:
 
 	cdef:
@@ -201,8 +205,6 @@ cdef class CFR_metadata:
 
 	cdef dict __unify_segment_dicts( self, list segdicts ) #noexcept
 
-	cdef void __destroy_unneeded_segrecs( self ) #noexcept
-
 	cdef void __update_collection_records( self, dict iterDict ) #noexcept	
 	
 	cdef void   collection_summary( self ) #noexcept
@@ -216,3 +218,6 @@ cdef class CFR_metadata:
 	cdef void   print_iter( self ) #noexcept
 
 	cdef void  _CFR_iteration_completed( self, double trainTime, list lHist, list vlHist ) #noexcept
+
+
+# *-* #

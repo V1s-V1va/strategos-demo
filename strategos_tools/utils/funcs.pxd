@@ -1,6 +1,7 @@
 #distutils: language = c
 #cython: language_level 3
 
+
 cimport cython
 from strategos_tools.core.CONSTS cimport *
 
@@ -81,3 +82,6 @@ cdef void _clear_current_line() #noexcept
 cdef void _move_console_cursor_up( uint numLines ) #noexcept
 
 cdef void _clear_prev_lines( uint numLines ) #noexcept
+
+
+# *-* #

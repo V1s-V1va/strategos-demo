@@ -2,8 +2,10 @@
 # cython: language_level 3
 # cython: profile = False
 
+
 from cpython.array cimport clone as pyarr
 from cython.view   cimport array as cyarr
+from libc.limits   cimport UINT_MAX
 from libc.math     cimport INFINITY
 
 from numpy import asarray as NP, expand_dims as newaxis
@@ -115,7 +117,7 @@ cdef flt1  arange( uint stop, uint start=1 ): #noexcept:
 # Avoids incurring bloat from python's min function
 cdef uint  MIN( uint1 a ): #noexcept:
 	
-	cdef uint arrmin = INFINITY, arrsize = a.shape[ 0 ], i
+	cdef uint arrmin = UINT_MAX, arrsize = a.shape[ 0 ], i
 	for i from 0 <= i < arrsize:
 		if a[ i ] < arrmin: 
 			arrmin = a[ i ]

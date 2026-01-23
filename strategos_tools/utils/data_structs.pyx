@@ -951,20 +951,6 @@ cdef class CFR_metadata:
 
 		return iterDict
 
-	# Once segmented records are unified, we no longer need them
-	# TODO: This should not be a CFR_metadata function, figure out somewhere else to put this
-	cdef void __destroy_unneeded_segrecs( self ): #noexcept:
-
-		cdef:
-			list segrecs = listdir( SEG_REC_DIR )
-			uint numSegs = len( segrecs ), s
-			str  segfile
-
-		for s from 1 <= s <= numSegs:
-			segfile = SEG_REC_DIR + segrecs[ s-1 ]
-			destroy( segfile )
-			print( f"\tSegrec file {cwd()+'/'+segfile} destroyed." )
-
 	# Extracts and stores data from unified record dict
 	cdef void __update_collection_records( self, dict iterDict ): #noexcept:
 	
@@ -1347,10 +1333,9 @@ cdef class CFR_metadata:
 		self.CurrentIter+=1
 		self.Iter_CPhase_Completed=0
 
-		# Save, print, and do cleanup
+		# Save metadata and print in human-readable form
 		self.save()
 		self.record_run()
-		post_train_cleanup( for_iter=self.CFRItersCompleted )
 		self.print_iter()
 		print()
 
