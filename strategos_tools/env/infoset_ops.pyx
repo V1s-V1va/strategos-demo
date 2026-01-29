@@ -93,7 +93,7 @@ cdef class infoset:
 	cdef uint2     CurrentRoundHist( self ): #noexcept:
 
 		# If current round doesn't include opp deals, nothing to redact, just return true history
-		if self.CurrentStreet != PREFLOP:
+		if self.CurrentStreet() != PREFLOP:
 			return self._n.CurrentRoundHist()
 
 		cdef uint2 trueRoundHist = self._n.CurrentRoundHist(),                                                         \

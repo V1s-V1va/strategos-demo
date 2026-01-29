@@ -93,8 +93,5 @@ cdef class infoset:
 	@staticmethod
 	cdef infoset   from_dict( dict Idict ) #noexcept
 
-	cdef str     __EndString( self ) #noexcept
-
-	cdef void      print_live_history( self, bint Suppress_Terminal_Info=* ) #noexcept
 
 # *-* #
