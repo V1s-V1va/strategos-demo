@@ -101,7 +101,7 @@ cdef class actionset:
 			self.MaxRaise  = self._I.MaxRaise() # Maximum POSSIBLE raise
 			
 			# If max possible raise < min allowed raise, only available raise is all-in 
-			self.Numraises = 1 if self.MinRaise >= self.MaxRaise else (self.MaxRaise - self.MinRaise) + 1
+			self.NumRaises = 1 if self.MinRaise >= self.MaxRaise else (self.MaxRaise - self.MinRaise) + 1
 			
 		else: 
 			self.NumRaises = 0
