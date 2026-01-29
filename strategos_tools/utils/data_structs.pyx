@@ -65,8 +65,8 @@ cdef class AdvNetInputs:
 				  fcArr  = cyarr( (1, FLOP_DEAL_SIZE, CVEC_SIZE), UINTSIZE, 'I' )
 			uint2 tcArr  = cyarr( (1, CVEC_SIZE), UINTSIZE, 'I' ),                                                     \
 				  rcArr  = cyarr( (1, CVEC_SIZE), UINTSIZE, 'I' ),                                                     \
-				  hCards = I.HoleCards( fill_to_max=TRUE ),                                                            \
-				  bCards = I.BoardCards( fill_to_max=TRUE )
+				  hCards = I.HoleCards( Fill_To_Max=TRUE ),                                                            \
+				  bCards = I.BoardCards( Fill_To_Max=TRUE )
 
 		hcArr[ 0 ] = hCards
 		fcArr[ 0 ] = bCards[:3 ] # first three bcards are flop deal
@@ -241,8 +241,8 @@ cdef class MMInputs_old:
 
 		cdef:
 			uint1   dealSteps  = Ipov.DealSteps()
-			uint[:] hCardIDs   = Ipov.HoleCards( fill_to_max=TRUE )[ :,CARD ],                                         \
-				    bCardIDs   = Ipov.BoardCards( fill_to_max=TRUE )[ :,CARD ] # not contiguous, so can't be uint1
+			uint[:] hCardIDs   = Ipov.HoleCards( Fill_To_Max=TRUE )[ :,CARD ],                                         \
+				    bCardIDs   = Ipov.BoardCards( Fill_To_Max=TRUE )[ :,CARD ] # not contiguous, so can't be uint1
 			uint2   convHCards = cyarr( (1,self.HOLEVEC_SIZE),  UINTSIZE, 'I' ),                                       \
 				    convBCards = cyarr( (1,self.BOARDVEC_SIZE), UINTSIZE, 'I' ),                                       \
 				    convASet   = self.__ActionsetConverter( actionset( Ipov ).AMat() ),                                \
@@ -267,7 +267,7 @@ cdef class MMInputs_old:
 		cdef:
 			infoset   Iopp       = infoset( sourceNode=Ipov._n, perspective_of=Ipov.OPPplayer )
 			uint1     dealSteps  = Ipov.DealSteps()
-			uint[:]	  bCardIDs   = Ipov.BoardCards( fill_to_max=TRUE )[ :,CARD ] # uncontig, can't be uint1
+			uint[:]	  bCardIDs   = Ipov.BoardCards( Fill_To_Max=TRUE )[ :,CARD ] # uncontig, can't be uint1
 			uint2     convASet   = self.__ActionsetConverter( actionset(Iopp).AMat() )
 			uint[:,:] hCardIDs   = Ipov.PossibleOppHands()[ :,:,CARD ] # not contig, can't be uint2
 			uint      nH         = hCardIDs.shape[ 0 ],                                                                \
@@ -650,8 +650,8 @@ cdef class DATAMACHINE:
 			aAdv   = sample.aAdv    # Sample adv target
 			I      = sample.Infoset # Source of sample history & cards
 			h      = I.hLen
-			iHole  = I.HoleCards( fill_to_max=TRUE )  # Sample hole cards
-			iBoard = I.BoardCards( fill_to_max=TRUE ) # Sample board cards
+			iHole  = I.HoleCards( Fill_To_Max=TRUE )  # Sample hole cards
+			iBoard = I.BoardCards( Fill_To_Max=TRUE ) # Sample board cards
 			iFlop  = iBoard[:3 ]                      # Sample flop cards
 			iTurn  = iBoard[ 3 ]                      # Sample turn cards
 			iRiver = iBoard[ 4 ]                      # Sample river cards
