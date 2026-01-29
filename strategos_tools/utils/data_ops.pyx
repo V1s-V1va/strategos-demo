@@ -26,8 +26,8 @@ from torch import as_tensor as TENSOR, from_numpy as NP2TENSOR, float32 as tf32,
 
 # ==================================================================================================
 # This module provides the data management tools that bridge the neural CFR collection and training 
-# phases. Operations include unifying segmented temp data from multiple collection workers, 
-# training data retrieval, and various other disk read/write utils.
+# phases. Operations include unifying segmented temp data from multiple collection workers into a
+# single training pool, training data retrieval, and various other disk read/write utils.
 # ==================================================================================================
 
 
@@ -39,7 +39,6 @@ cdef list   load_models( str from_file, int for_iter=-1 ): #noexcept:
 
 	with open( from_file,'rb' ) as modelFile:
 		while True:
-
 			try: 
 				mDict = pickle.load( modelFile )
 			except EOFError: 
@@ -59,8 +58,8 @@ cdef list  _load_advmaps( str from_file, int for_iter=-1 ): #noexcept:
 		list   advmaps=[]
 
 	with open( from_file,'rb' ) as samplefile:
-		while True:
 
+		while True:
 			try: 
 				adict = pickle.load( samplefile )
 			except EOFError: 
@@ -87,7 +86,7 @@ cdef list __extract_all_samples( list from_advmaps ): #noexcept:
 		amap = from_advmaps[ m-1 ]
 		tSamples.extend( amap.extract_samples() )
 		print( PB(m,nMaps) + f" ( {m}/{nMaps} )          ", end='\r' )
-
+		
 	print( f"\nSuccessfully extracted {len( tSamples )} individual samples." )
 
 	return tSamples
@@ -99,10 +98,8 @@ cdef list __load_segmented_sample_dicts( str from_file ): #noexcept:
 
 	with open( from_file,'rb' ) as sampleFile:
 		while True:
-			try: 
-				loadedDicts.append( pickle.load( sampleFile ) )
-			except EOFError: 
-				break
+			try: loadedDicts.append( pickle.load( sampleFile ) )
+			except EOFError: break
 
 	return loadedDicts
 
@@ -125,9 +122,9 @@ cdef void __clear_existing_samples( str in_file ): #noexcept:
 	open( in_file,'wb+' ).close()
 
 # After unifying newly collected data, serialize it to persistent storage
-cdef void __save_unsegmented_samples( list shuffledSamples, str to_file, bint clear_existing=FALSE ): #noexcept:
+cdef void __save_unsegmented_samples( list shuffledSamples, str to_file, bint Clear_Existing=FALSE ): #noexcept:
 	
-	if clear_existing:
+	if Clear_Existing:
 		__clear_existing_samples( in_file=to_file )
 		print( f"\tExisting data in file {to_file} cleared; file ready for updated data." )
 
@@ -135,23 +132,24 @@ cdef void __save_unsegmented_samples( list shuffledSamples, str to_file, bint cl
 		print( "\tSaving updated sample list, plz be patient..." )
 		pickle.dump( shuffledSamples, Finalized_Sample_File, protocol=-1 )
 
-# Handles the extension part of the per-iter, post-collection data management process: 
-# Load existing train & val data ⟶ shuffle & split new data ⟶ append new train & val data to existing ⟶ 
+# Handles the "extension" part of the per-iter, post-collection data management process: 
+# Load existing train & val data ⟶ shuffle & split new data into train & val sets ⟶ append to existing ⟶
 # shuffle results ⟶ clear old data from disk (it's all in mem now anyway) ⟶ save extended train & val data
 cdef void __append_new_data( str trainFile, str valFile, list iterSamples, float val_split=0.25 ): #noexcept:
 
 	print( f"\nFound {len( iterSamples )} new iter samples. Loading pre-existing data..." )
 
-	cdef list tAdvs     = __load_existing_sample_dicts( trainFile ),                                                   \
-			  vAdvs     = __load_existing_sample_dicts( valFile ),                                                     \
-			  newAdvs   = iterSamples,                                                                                 \
-			  newTAdvs,                                                                                                \ 
-			  newVAdvs
-	cdef uint nNewAdvs  = <uint>len( newAdvs ),                                                                        \
-			  nTAdvs    = <uint>len( tAdvs ),                                                                          \
-			  nVAdvs    = <uint>len( vAdvs ),                                                                          \
-			  nNewVAdvs = <uint>(nNewAdvs * val_split),                                                                \
-			  nNewTAdvs = nNewAdvs - nNewVAdvs
+	cdef:
+		list tAdvs     = __load_existing_sample_dicts( trainFile ),                                                    \
+			 vAdvs     = __load_existing_sample_dicts( valFile ),                                                      \
+			 newAdvs   = iterSamples,                                                                                  \
+			 newTAdvs,                                                                                                 \
+			 newVAdvs
+		uint nNewAdvs  = <uint>len( newAdvs ),                                                                         \
+			 nTAdvs    = <uint>len( tAdvs ),                                                                           \
+			 nVAdvs    = <uint>len( vAdvs ),                                                                           \
+			 nNewVAdvs = <uint>(nNewAdvs * val_split),                                                                 \
+			 nNewTAdvs = nNewAdvs - nNewVAdvs
 
 	print( f"Loaded {nTAdvs} existing train samples & {nVAdvs} existing val samples" )
 
@@ -169,37 +167,41 @@ cdef void __append_new_data( str trainFile, str valFile, list iterSamples, float
 	nVAdvs = <uint>len( vAdvs )
 	print( f"\tAppended new data to existing data; resulting collections shuffled." )
 
-	# TODO: The "clear_existing" part of this is dangerous - how do we avoid this?
+	# TODO: The "Clear_Existing" part of this is dangerous - how do we avoid this?
 	print( f"\nSaving {nTAdvs} combined training samples to file {trainFile}..." )
-	__save_unsegmented_samples( tAdvs, to_file=trainFile, clear_existing=TRUE )
+	__save_unsegmented_samples( tAdvs, to_file=trainFile, Clear_Existing=TRUE )
 	print( f"Training data saved." )
 
-	# TODO: The "clear_existing" part of this is dangerous - how do we avoid this?
+	# TODO: The "Clear_Existing" part of this is dangerous - how do we avoid this?
 	print( f"\nSaving {nVAdvs} combined val samples to file {valFile}..." )
-	__save_unsegmented_samples( vAdvs, to_file=valFile, clear_existing=TRUE )
+	__save_unsegmented_samples( vAdvs, to_file=valFile, Clear_Existing=TRUE )
 	print( f"Validation data saved." )
 
 # Orchestrates per-iter, post-collection data management process (unification + extension): 
 # Find new segmented per-worker temp adv files ⟶ load sample dicts from each ⟶ combine them ⟶
 # append new unified data to existing data
-cdef void  _unsegment_iter_data( str trainFile, str valFile, float val_split=0.25 ): #noexcept:
+cdef void  _unsegment_iter_data( str advDir, str trainFile, str valFile, float val_split=0.25 ): #noexcept:
 
 	cdef:
-		list allFiles  = listdir( SEG_ADV_DIR ), segSamples=[], newIterSamples=[]
+		list allFiles  = listdir( advDir ), segSamples=[], newIterSamples=[]
 		uint nSegments = <uint>len( allFiles ), s
 		str  segFile
 
-	print( f"\nUnifying segmented adv data from segAdv dir: {cwd()+'/'+SEG_ADV_DIR}..." )
+	print( f"\nUnifying segmented adv data from {advDir}..." )
+	print( f"Target files:" )
+	print( f"\tTraining data:   {trainFile}" )
+	print( f"\tValidation data: {valFile}" )
 	for s from 1 <= s <= nSegments:
-		segFile = SEG_ADV_DIR + allFiles[ s-1 ]
+		segFile = advDir + '/' + allFiles[ s-1 ]
 		print( f"\n\tFound segFile {segFile} for collection segment #{s}" )
 
 		segSamples = __load_segmented_sample_dicts( from_file=segFile )
 		print( f"\tLoaded {len( segSamples )} samples from segFile #{s}" )
 
 		newIterSamples.extend( segSamples )
-		print( f"\tExtended iterSamples with samples from segment #{s}. Running total iter samples: {len(iterSamples)}" )
-	print( f"\nGathered {len( iterSamples )} total combined iter samples from segmented data." )
+		print( f"\tExtended iterSamples with samples from segment #{s}. Running total iter samples: {len(newIterSamples)}" )
+		
+	print( f"\nGathered {len( newIterSamples )} total combined iter samples from segmented data." )
 
 	__append_new_data( trainFile, valFile, newIterSamples, val_split )
 
@@ -215,26 +217,27 @@ cdef list  _load_true_samples( str from_file ): #noexcept:
 	return trueSamples
 
 # Final operation after completion of a CFR iter; just cleans up temp multi-worker collection files
-cdef void  _post_iter_cleanup( uint for_iter ): #noexcept:
+cdef void  _post_iter_cleanup( str advDir, uint for_iter ): #noexcept:
 
 	cdef:
-		list allFiles  = listdir( SEG_ADV_DIR ) # No longer need this segmented training data
+		list allFiles  = listdir( advDir ) # No longer need this segmented training data
 		uint nSegments = <uint>len( allFiles ), s
 		str  segmentFile
 
 	print( f"\nCleaning up iteration {for_iter} temp data..." )
-	print( f"Destroying {nSegments} temp segmented adv files from dir: {cwd()+'/'+SEG_ADV_DIR}..." )
+	print( f"Destroying {nSegments} temp segmented adv files from dir: {advDir}..." )
 
 	for s from 1 <= s <= nSegments:
-		segmentFile = SEG_ADV_DIR + allFiles[ s-1 ]
+		segmentFile = advDir + '/' + allFiles[ s-1 ]
 		destroy( segmentFile )
 		print( f"\n\tSegAdv file {cwd() + '/' + segmentFile} destroyed." )
 
 	print( f"\nFINAL SEGMENTED DATA CLEANUP COMPLETE. Ready to commence iter {for_iter+1}." )
-	
+
 
 # ---------- PYTHON INTERFACE FUNCTIONS ------------------------------------------------------------
-# So we can do disk read/write ops from python scripts
+# So we can do disk read/write ops from the python scripts that implement the per-iter data
+# management process bridging SDCFR phases.
 
 
 # Use this in python-level nn code to get samples for DATAMACHINE constructor
@@ -242,17 +245,17 @@ def load_nn_samples( from_file ):
 	return _load_true_samples( from_file )
 
 # Use this in python-level data mgmt code to combine new segmented data after collection phase completes
-def unsegment_iter_data( trainFile, valFile, val_split=0.25 ):
-	_unsegment_iter_data( trainFile, valFile, val_split )
+def unsegment_iter_data( advDir, trainFile, valFile, val_split=0.25 ):
+	_unsegment_iter_data( advDir, trainFile, valFile, val_split )
 
 # Tells us how many traversals have already been completed by the specified worker
-def get_rank_pretravs( pRank ):
+def get_rank_pretravs( recDir, pRank ):
 	
-	# Exclusion conditions
-	segFiles = listdir( SEG_REC_DIR )
+	segFiles = listdir( recDir )
 	if len( segFiles )==0: 
 		return 0
-	rankPrefix = SEG_REC_DIR + f"segrecords_P{pRank}"
+		
+	rankPrefix = recDir + '/' + f"segrecords_P{pRank}"
 	if not any([ segfile.startswith( rankPrefix ) for segfile in segFiles ]): 
 		return 0
 
@@ -282,8 +285,8 @@ def get_current_iter( metaFile ):
 	return mData.CurrentIter
 
 # Final iter-end temp file cleanup, called at end of iter's training phase
-def post_iter_cleanup( for_iter ):
-	_post_iter_cleanup( for_iter )
+def post_iter_cleanup( advDir, for_iter ):
+	_post_iter_cleanup( advDir, for_iter )
 
-	
+
 # *-* #

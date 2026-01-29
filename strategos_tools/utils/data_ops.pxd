@@ -25,15 +25,15 @@ cdef list __load_existing_sample_dicts( str from_file ) #noexcept
 
 cdef void __clear_existing_samples( str in_file ) #noexcept
 
-cdef void __save_unsegmented_samples( list shuffledSamples, str to_file, bint clear_existing=* ) #noexcept
+cdef void __save_unsegmented_samples( list shuffledSamples, str to_file, bint Clear_Existing=* ) #noexcept
 
 cdef void __append_new_data( str trainFile, str valFile, list iterSamples, float val_split=* ) #noexcept
 
-cdef void  _unsegment_iter_data( str trainFile, str valFile, float val_split=* ) #noexcept
+cdef void  _unsegment_iter_data( str advDir, str trainFile, str valFile, float val_split=* ) #noexcept
 
 cdef list  _load_true_samples( str from_file ) #noexcept
 
-cdef void  _post_iter_cleanup( uint for_iter ) #noexcept
+cdef void  _post_iter_cleanup( str advDir, uint for_iter ) #noexcept
 
 
 # *-* #
