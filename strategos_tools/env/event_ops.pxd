@@ -14,8 +14,6 @@ cdef class gameevent:
 	cdef void  __MANUAL_INIT__( self, uint eventType, uint playedBy, uint raiseAmt, uint betTotal, 
 								uint Is_AllIn, uint allInDiff, uint dealTo, uint cDealt ) #noexcept
 
-	cdef bint  __EQ__( self, gameevent e ) #noexcept
-
 	cdef uint1   to_array( self ) #noexcept
 
 	cdef str     GTString( self ) #noexcept
@@ -24,8 +22,10 @@ cdef class gameevent:
 
 	cdef str     ShorterString( self, uint stepNum, bint Include_Array=* ) #noexcept
 
+	cdef bint  __EQ__( self, gameevent e ) #noexcept
 
-cdef uint2 AllNonRaises( uint player, uint callAmt=*, bint allin_call=*, uint callDiff=* ) #noexcept
+	
+cdef uint2 AllNonRaises( uint player, uint callAmt=*, bint AllIn_Call=*, uint callDiff=* ) #noexcept
 
 cdef bint  Is_Dealer_Action( uint1 e ) #noexcept
 

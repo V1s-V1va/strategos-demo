@@ -29,10 +29,12 @@ from numpy import asarray as NP, uintc
 cdef class gameevent:
 
 	def __init__( self, uint eventType=NULLEVENT, uint playedBy=0, uint raiseAmt=0, uint betTotal=0, 
-				  uint Is_AllIn=0, uint allInDiff=0, uint dealTo=0, uint cDealt=0, uint1 from_array=None ):
+				  uint Is_AllIn=FALSE, uint allInDiff=0, uint dealTo=0, uint cDealt=0, 
+				  uint1 from_array=None ):
 
 		if from_array is None:
-			self.__MANUAL_INIT__( eventType, playedBy, raiseAmt, betTotal, Is_AllIn, allInDiff, dealTo, cDealt )
+			self.__MANUAL_INIT__( eventType, playedBy, raiseAmt, betTotal, 
+								  Is_AllIn, allInDiff, dealTo, cDealt )
 		else:
 			self.__AUTOINIT__( from_array )
 
@@ -154,9 +156,6 @@ cdef class gameevent:
 		eData.append( (' '*6) + '[ ' + ' '.join( arrList ) + ' ]' )
 		return '| |'.join( eData )
 
-	def __eq__( self, gameevent e ): 
-		return self.__EQ__( e )
-
 	cdef bint __EQ__( self, gameevent e ): #noexcept:
 
 		cdef uint1 e1 = self.to_array(), e2 = e.to_array()
@@ -168,17 +167,23 @@ cdef class gameevent:
 
 		return TRUE
 
+	def __eq__( self, gameevent e ): 
+		return self.__EQ__( e )
+
 
 # Returns an array of non-raise actions, can be indexed using etypes
 # Useful for building sets of available player actions
-cdef uint2 AllNonRaises( uint player, uint callAmt=0, bint allin_call=0, uint callDiff=0 ): #noexcept:
+cdef uint2 AllNonRaises( uint player, uint callAmt=0, bint AllIn_Call=FALSE, uint callDiff=0 ): #noexcept:
 
 	cdef uint2 nonRaises   = cyarr( (NON_RAISE_ETYPES+1, EVEC_SIZE), UINTSIZE, 'I' )
 	cdef uint  p           = player
+
 	nonRaises[ NULLEVENT ] = gameevent( NULLEVENT ).to_array()
-	nonRaises[ FOLD ]      = gameevent( FOLD,  p ).to_array()
-	nonRaises[ CHECK ]     = gameevent( CHECK, p ).to_array()
-	nonRaises[ CALL ]      = gameevent( CALL,  p, betTotal=callAmt, Is_AllIn=allin_call, allInDiff=callDiff ).to_array()
+	nonRaises[ FOLD ]  = gameevent( FOLD,  p ).to_array()
+	nonRaises[ CHECK ] = gameevent( CHECK, p ).to_array()
+	nonRaises[ CALL ]  = gameevent( CALL,  p, 
+									betTotal=callAmt, Is_AllIn=AllIn_Call, allInDiff=callDiff ).to_array()
+
 	return nonRaises
 
 cdef inline bint  Is_Dealer_Action( uint1 e ): #noexcept:
