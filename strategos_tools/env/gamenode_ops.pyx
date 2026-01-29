@@ -916,17 +916,18 @@ cdef class gamenode:
 	cdef void        DIAGNOSTIC( self ): #noexcept:
 
 		cdef:
-			uint  rndStart   = self.CurrentRoundStart(), d
-			uint1 aPlayers   = self.ActivePlayers()
-			uint2 gapDeck    = self.AvailableDeck( Include_Gaps=TRUE ), allCards = self.AllDealtCards(),               \
-				  bCards     = self.BoardCards(), h1Cards = self.HoleCards( 1 ), h2Cards = self.HoleCards( 2 ),        \
-				  allInSeq   = self.AllInSequence()
-			str   printDeck  = '|'.join( CardOps.PrettyCardStrings( gapDeck, Compact=TRUE,center=FALSE ) ),            \
-				  printBoard =  ''.join( CardOps.PrettyCardStrings( bCards,  Compact=TRUE,center=FALSE ) ),            \
-				  printH1    =  ''.join( CardOps.PrettyCardStrings( h1Cards, Compact=TRUE,center=FALSE ) ),            \
-				  printH2    =  ''.join( CardOps.PrettyCardStrings( h2Cards, Compact=TRUE,center=FALSE ) ),            \
-				  printCards =  ''.join( CardOps.PrettyCardStrings( allCards,Compact=TRUE,center=FALSE ) ),            \
+			uint  rndStart    = self.CurrentRoundStart(), d
+			uint1 aPlayers    = self.ActivePlayers()
+			uint2 gapDeck     = self.AvailableDeck( Include_Gaps=TRUE ), allCards = self.AllDealtCards(),              \
+				  bCards      = self.BoardCards(), h1Cards = self.HoleCards( 1 ), h2Cards = self.HoleCards( 2 ),       \
+				  allInSeq    = self.AllInSequence()
+			str   printDeck   = '|'.join( CardOps.PrettyCardStrings( gapDeck, Compact=TRUE, Center=FALSE ) ),          \
+				  printBoard  =  ''.join( CardOps.PrettyCardStrings( bCards,  Compact=TRUE, Center=FALSE ) ),          \
+				  printH1     =  ''.join( CardOps.PrettyCardStrings( h1Cards, Compact=TRUE, Center=FALSE ) ),          \
+				  printH2     =  ''.join( CardOps.PrettyCardStrings( h2Cards, Compact=TRUE, Center=FALSE ) ),          \
+				  printCards  =  ''.join( CardOps.PrettyCardStrings( allCards,Compact=TRUE, Center=FALSE ) ),          \
 				  winnerStr
+			tuple BLINDSTATES = ( "NOPE", "SB", "BB" )
 
 		print( '\n'+('='*100) )
 		print( ">>> GAMENODE DIAGNOSTIC <<<".center(100) )

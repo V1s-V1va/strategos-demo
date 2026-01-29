@@ -365,15 +365,17 @@ cdef class infoset:
 	cdef void      summary( self, bint Append_To_Node_Summary=FALSE ): #noexcept:
 
 		cdef:
-			uint      rStart   = self.CurrentRoundStart(), blind = self.Is_Posting_Blind(), s, c
-			uint1     bTotals  = self.BetTotals(), rbTotals = self.BetTotals( from_point=rStart ), eArr
-			uint2     bCards   = self.BoardCards(), hCards = self.HoleCards(), oCards = self.ObservableCards(),        \
-					  subjHist = self.NNHistory()
-			str       bPretty  = ''.join( CardOps.PrettyCardStrings( bCards ) ),                                       \
-				      hPretty  = ''.join( CardOps.PrettyCardStrings( hCards ) ),                                       \
-				      oPretty  = ''.join( CardOps.PrettyCardStrings( oCards ) ),                                       \
-				      blindStr = BLINDSTATES[ blind ]
-			gameevent lRaise   = self.LastEvent( from_point=rStart,of_type=RAISE ), stepEvent
+			uint      rStart      = self.CurrentRoundStart(), blind = self.Is_Posting_Blind(), s, c
+			uint1     bTotals     = self.BetTotals(), rbTotals = self.BetTotals( from_point=rStart ), eArr
+			uint2     bCards      = self.BoardCards(), hCards = self.HoleCards(), oCards = self.ObservableCards(),     \
+					  subjHist    = self.NNHistory()
+  			tuple     BLINDSTATES = ( "NOPE", "SB", "BB" )
+			str       bPretty     = ''.join( CardOps.PrettyCardStrings( bCards ) ),                                    \
+				      hPretty     = ''.join( CardOps.PrettyCardStrings( hCards ) ),                                    \
+				      oPretty     = ''.join( CardOps.PrettyCardStrings( oCards ) ),                                    \
+				      blindStr    = BLINDSTATES[ blind ]
+			gameevent lRaise      = self.LastEvent( from_point=rStart,of_type=RAISE ), stepEvent
+
 
 		if not Append_To_Node_Summary:
 			print( '\n'+('='*100 ))

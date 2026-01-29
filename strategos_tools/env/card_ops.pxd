@@ -30,7 +30,7 @@ cdef int1  DeuceInts( uint2 cardVecs ) #noexcept
 
 cdef uint2 VecDeck() #noexcept
 
-cdef uint2 FilteredDeck( uint2 excludeCards, bint include_gaps=* ) #noexcept
+cdef uint2 FilteredDeck( uint2 excludeCards, bint Include_Gaps=* ) #noexcept
 
 cdef uint1 Draw( uint2 from_deck ) #noexcept
 
