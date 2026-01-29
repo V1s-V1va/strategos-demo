@@ -2,6 +2,7 @@
 # cython: language_level 3
 # cython: profile = False
 
+
 from libc.stdlib cimport malloc, realloc, free
 
 cimport cython
@@ -12,7 +13,9 @@ from cpython.array cimport clone as pyarr
 from cython.view   cimport array as cyarr
 
 cimport strategos_tools.utils.funcs as util
-from strategos_tools.core.CONSTS cimport *
+from strategos_tools.core.CONSTS      cimport *
+from strategos_tools.env.player_ops   cimport Are_Opponents
+from strategos_tools.env.gamenode_ops cimport DummyNode
 
 import datetime, pickle, numpy as np
 from random import shuffle as permute
@@ -22,6 +25,7 @@ from time   import time as TimeNow
 import torch as pt
 from numpy import asarray as NP, ascontiguousarray as CONTIG, float32 as f32, float64 as f64, uintc, intc
 from torch import as_tensor as TENSOR, float32 as tf32, int32 as tintc
+#from torch import from_numpy as TENSOR
 
 
 # ==================================================================================================
@@ -120,7 +124,7 @@ cdef class MMInputs:
 		self.T   = iterSpan + 1 # Useful downstream to store this on MMInputs
 		self.GPU = f"cuda:{GPUrank}"
 
-		# Is POV or OPP acting at the position we're evaluating? Signals whose hole cards to use
+		# Is POV or OPP acting at the position we're evaluating? Tells us whose hole cards to use
 		cdef bint Opp_State = Are_Opponents( actingPlayer, Ipov.POVplayer )
 		
 		# Infoset for the current acting player, which may or may not be the POV player
@@ -135,9 +139,17 @@ cdef class MMInputs:
 	# Constructs history tensor, accounts for whether we're doing pov or opp inference
 	cdef void __init_history( self, infoset Ipov, bint Opp_State ): #noexcept:
 
-		cdef tuple hShape = (1, Ipov.hLen, EVEC_SIZE) 
-		cdef uint3 hArr   = cyarr( hShape, UINTSIZE, 'I' ) if not Opp_State else Ipov.PossibleOppHistories()
-		if not Opp_State: 
+		cdef tuple hShape
+		cdef uint3 hArr
+
+		# many potential histories corresponding to possible opponent hands
+		if Opp_State: 
+			hArr = Ipov.PossibleOppHistories()
+
+		# one definite known POV history
+		else:
+			hShape    = (1, Ipov.hLen, EVEC_SIZE)
+			hArr      = cyarr( hShape, UINTSIZE, 'I' )
 			hArr[ 0 ] = Ipov.ObservableHistory()
 
 		self.nI = hArr.shape[ 0 ] # number of distinct infosets we're evaluating actions for
@@ -153,11 +165,11 @@ cdef class MMInputs:
 				  fcArr  = cyarr( (1, FLOP_DEAL_SIZE, CVEC_SIZE), UINTSIZE, 'I' )
 			uint2 tcArr  = cyarr( (1, CVEC_SIZE), UINTSIZE, 'I' ),                                                     \
 				  rcArr  = cyarr( (1, CVEC_SIZE), UINTSIZE, 'I' ),                                                     \
-				  bCards = Ipov.BoardCards( fill_to_max=TRUE )
+				  bCards = Ipov.BoardCards( Fill_To_Max=TRUE )
 
 		# If Opp_State, we already got all possible opp hole cards above
 		if not Opp_State: 
-			hcArr[ 0 ] = Ipov.HoleCards( fill_to_max=TRUE )
+			hcArr[ 0 ] = Ipov.HoleCards( Fill_To_Max=TRUE )
 
 		# Board cards are known regardless of Opp_State
 		fcArr[ 0 ] = bCards[:3 ] # flop  = first three board deals
@@ -204,7 +216,7 @@ cdef class MMInputs:
 		return MMInputs._DummyInputs( iterSpan,GPUrank )
 
 
-# Legacy MM input format for doing evals against old non-transformer models with old card vector format
+# Legacy MM input format for doing evals against old non-transformer models w old card vector format
 cdef class MMInputs_old:
 
 	def __init__( self, uint actingPlayer, infoset Ipov, uint iterSpan, uint GPUrank=0 ): 
@@ -216,8 +228,8 @@ cdef class MMInputs_old:
 		self.OLD_CVEC_SIZE = 17
 		self.OLD_EVEC_SIZE = 24
 		self.NEW_EVEC_SIZE = EVEC_SIZE
-		self.HOLEVEC_SIZE  = self.OLD_CVEC_SIZE * MAX_HOLE_CARDS  # 34
-		self.BOARDVEC_SIZE = self.OLD_CVEC_SIZE * MAX_BOARD_CARDS # 85
+		self.HOLEVEC_SIZE  = self.OLD_CVEC_SIZE * MAX_HOLE_CARDS  # = 34
+		self.BOARDVEC_SIZE = self.OLD_CVEC_SIZE * MAX_BOARD_CARDS # = 85
 
 		if Are_Opponents( actingPlayer,Ipov.POVplayer ): 
 			self.__init_opp_state( Ipov,GPUrank )
@@ -255,9 +267,9 @@ cdef class MMInputs_old:
 		cdef:
 			infoset   Iopp       = infoset( sourceNode=Ipov._n, perspective_of=Ipov.OPPplayer )
 			uint1     dealSteps  = Ipov.DealSteps()
-			uint[:]	  bCardIDs   = Ipov.BoardCards( fill_to_max=TRUE )[ :,CARD ] # not contiguous, so can't be uint1
+			uint[:]	  bCardIDs   = Ipov.BoardCards( fill_to_max=TRUE )[ :,CARD ] # uncontig, can't be uint1
 			uint2     convASet   = self.__ActionsetConverter( actionset(Iopp).AMat() )
-			uint[:,:] hCardIDs   = Ipov.PossibleOppHands()[ :,:,CARD ] # not contiguous, so can't be uint2
+			uint[:,:] hCardIDs   = Ipov.PossibleOppHands()[ :,:,CARD ] # not contig, can't be uint2
 			uint      nH         = hCardIDs.shape[ 0 ],                                                                \
 					  nA         = convASet.shape[ 0 ],                                                                \
 					  h
@@ -275,7 +287,7 @@ cdef class MMInputs_old:
 
 		self.nI = nH
 		self.nA = nA
-		self.nSamples = nH*nA # Each action has to be evaluated against each possible opponent infoset
+		self.nSamples = nH*nA # Each action has to be eval'd against each possible opponent infoset
 		self.__init_tensors( convHist, convHCards, convBCards, convASet, GPUrank )
 
 	cdef void  __init_tensors( self, uint3 H, uint2 hC, uint2 bC, uint2 A, uint GPUrank ): #noexcept:
@@ -285,7 +297,7 @@ cdef class MMInputs_old:
 		self.bC = pt.tensor( NP( bC,dtype=f32 ), device=GPU )
 		self.A  = pt.tensor( NP( A, dtype=f32 ), device=GPU )
 
-	# Converts modern card IDs to old binary vector representation
+	# Converts modern single-int card IDs to old binary vector representation
 	cdef uint2 __CardConverter( self, uint[:] cardIDs ): #noexcept:
 
 		cdef:
@@ -305,13 +317,13 @@ cdef class MMInputs_old:
 
 		return cardVecs
 
-	# Reshape hArr (nH,hLen,8) ⟶ (nH,hLen,24), fill extra space with old cardVecs derived from modern cardIDs
+	# Reshape hArr (nH,hLen,8) ⟶ (nH,hLen,24), fill extra space w old cardVecs derived from new cardIDs
 	cdef uint3 __HistoryConverter( self, uint3 hArr, uint1 dealSteps ): #noexcept:
 
 		cdef:
 			uint    nH = hArr.shape[ 0 ], hLen = hArr.shape[ 1 ], nDeals = dealSteps.shape[ 0 ], d, dStep
 			uint3   convertedHist = cyarr( (nH, hLen, self.OLD_EVEC_SIZE), UINTSIZE, 'I' )
-			uint[:] stepCard # uint[:] instead of uint1 because what we assign to this isn't contiguous
+			uint[:] stepCard # uint[:] instead of uint1 because what we assign here isn't contiguous
 
 		# Make room for old card vecs to replace card ints
 		convertedHist[ :,:,:self.NEW_EVEC_SIZE ] = hArr
@@ -321,7 +333,7 @@ cdef class MMInputs_old:
 			dStep = dealSteps[ d ]
 
 			if dStep > 0: # dStep==0 implies card d hasn't been dealt yet
-				stepCard = hArr[ :,dStep,CDEALT ] # card dealt at this step across all input histories
+				stepCard = hArr[ :,dStep,CDEALT ] # card dealt @ this step across all input histories
 				convertedHist[ :,dStep,CDEALT: ] = self.__CardConverter( stepCard )
 
 		return convertedHist
@@ -339,13 +351,15 @@ cdef class MMInputs_old:
 
 		return multiVec
 
-	# Expands size of event vectors in an action set matrix for input compatibility with legacy models
+	# Expands size of event vectors in an actionset matrix for input compat with legacy models
 	cdef uint2 __ActionsetConverter( self, uint2 A ): #noexcept:
 
 		cdef uint  nA = A.shape[ 0 ]
 		cdef uint2 convertedA = cyarr( (nA,self.OLD_EVEC_SIZE), UINTSIZE, 'I' )
+
 		convertedA[ :,EVEC_SIZE: ] = 0
 		convertedA[ :,:EVEC_SIZE ] = A
+
 		return convertedA
 
 
@@ -419,7 +433,7 @@ cdef class advmap:
 		with open( to_file,'ab' ) as advFile: 
 			pickle.dump( advDict, advFile, protocol=-1 )
 
-	# Serialization helper: ∀ sample s ∈ advmap, do equiv of s.to_dict(), return list of all sample dicts
+	# Serialization helper: ∀ sample s ∈ advmap, do equiv of s.to_dict(), return list of all dicts
 	cdef list __extract_sample_dicts( self ): #noexcept:
 
 		cdef:
@@ -440,10 +454,12 @@ cdef class advmap:
 
 		return Isamples
 
-	# Preferred way to serialize an advmap; instead of the advmap itself, just serialize all its samples
+	# Preferred advmap serialization; instead of the advmap itself, just serialize all its samples
 	cdef void   save_sample_dicts( self, str to_file ): #noexcept:
+
 		cdef list sDicts = self.__extract_sample_dicts()
 		cdef dict sDict
+
 		with open( to_file,'ab' ) as sampleFile:
 			for sDict in sDicts:
 				pickle.dump( sDict, sampleFile, protocol=-1 )
@@ -479,18 +495,22 @@ cdef class advmap:
 		return self.NumSamples
 
 
-# Batched, aligned, GPU-allocated AdvNet training samples (includes fwd-pass inputs + output targets)
+# Batched GPU-allocated AdvNet training samples, very specific highly efficient memory layout.
+# Includes fwd-pass inputs and advantage output targets.
 cdef class DataBatch:
 
+	# TODO: Roll these inputs up into a tuple or something, this function signature is a warcrime.
 	def __init__( self, int3 H,
 						uint2 hCc, uint2 hCr, uint2 hCs,
 						uint2 fCc, uint2 fCr, uint2 fCs,
 						uint1 tCc, uint1 tCr, uint1 tCs,
 						uint1 rCc, uint1 rCr, uint1 rCs,
 						uint2 A,   flt1  V,   uint1 W,   uint2 M, str GPU ):
+
 		self.__INIT__( H, hCc,hCr,hCs, fCc,fCr,fCs, tCc,tCr,tCs, rCc,rCr,rCs, A, V, W, M, GPU )
 
 
+	# TODO: Roll these inputs up into a tuple or something, this function signature is a warcrime.
 	cdef void __INIT__( self, int3 H,
 							  uint2 hCc, uint2 hCr, uint2 hCs,
 							  uint2 fCc, uint2 fCr, uint2 fCs,
@@ -518,8 +538,8 @@ cdef class DataBatch:
 		self.M    = TENSOR( NP( M,  dtype=bool ), device=GPU ) # Bool transformer mask for nonuniform history inputs
 
 
-# Specialized replacement for PyTorch's bloated DataLoader. Allocates, populates, and exposes
-# batched training data in a way compatible with multi-GPU training.
+# Specialized replacement for PyTorch's bloated DataLoader. 
+# Allocates, populates, and exposes batched training data in a way compatible with multi-GPU training.
 cdef class DATAMACHINE:
 
 	def __init__( self, list shuffledSamples, uint bsize, int world_size, int rank ):
@@ -535,7 +555,7 @@ cdef class DATAMACHINE:
 		self.__allocate_temp_storage()
 		self.__populate_temp_storage( shuffledSamples )
 		self.__partition_storage()
-		self.__destroy_temp_storage() # Temp storage no longer needed after partitioning
+		self.__destroy_temp_storage() # temp storage no longer needed after partitioning
 
 	# Need to know max(|H|) to allocate a contiguous array for all histories. Faster than python max()
 	cdef void     __find_max_hLen( self, list from_samples ): #noexcept:
@@ -605,8 +625,8 @@ cdef class DATAMACHINE:
 		cdef uint1 sampleMask = cyarr( (self.Lmax,), UINTSIZE, 'I' )
 
 		for i from 0 <= i < self.Lmax: 
-			sampleMask[ i ] = <uint>(i >= hLen)
-
+			sampleMask[ i ] = <uint>(i >= hLen) # god zero indexing is just terrible
+			
 		return sampleMask
 
 	# Get sample at global idx s ⟶ extract data from it ⟶ copy data into temp storage at local idx
@@ -622,19 +642,19 @@ cdef class DATAMACHINE:
 			float     aAdv
 			uint      s,h,i,t
 
-		# Generate tensors for local DM sample i from global advsample s
+		# Take adv sample at global index s and populate local DATAMACHINE index i with it
 		for s from self._dataStart <= s < self._dataStop:
 			sample = shuffledSamples[ s ]
-			t      = sample.t       # Sample weight
+			t      = sample.t       # Sample weight = CFR iter it was collected on
 			aVec   = sample.aVec    # Sample action vector
 			aAdv   = sample.aAdv    # Sample adv target
 			I      = sample.Infoset # Source of sample history & cards
 			h      = I.hLen
-			iHole  = I.HoleCards( fill_to_max=TRUE )
-			iBoard = I.BoardCards( fill_to_max=TRUE )
-			iFlop  = iBoard[:3 ]
-			iTurn  = iBoard[ 3 ]
-			iRiver = iBoard[ 4 ]
+			iHole  = I.HoleCards( fill_to_max=TRUE )  # Sample hole cards
+			iBoard = I.BoardCards( fill_to_max=TRUE ) # Sample board cards
+			iFlop  = iBoard[:3 ]                      # Sample flop cards
+			iTurn  = iBoard[ 3 ]                      # Sample turn cards
+			iRiver = iBoard[ 4 ]                      # Sample river cards
 			iHist  = NP( I.ObservableHistory(),dtype=intc ) # Gotta NP this to change uint ⟶ int (ugh)
 			iMask  = self.__history_mask( h )
 
@@ -663,7 +683,7 @@ cdef class DATAMACHINE:
 			self._W[ i ] = t     # Sample s weight
 			self._M[ i ] = iMask # Sample s history mask
 
-	# No need for all this unbatched shit sitting in mem receiving tax dollars if it's no longer doing work for us
+	# No need for all this unbatched stuff sitting in mem receiving tax dollars if it's no longer doing work for us
 	cdef void     __destroy_temp_storage( self ): #noexcept:
 		self._H   = None
 		self._hCc = None
@@ -684,6 +704,7 @@ cdef class DATAMACHINE:
 		self._M   = None
 
 	# Use nBatches & BatchSize to determine storage arr shapes ⟶ assign empty arrs to batched storage
+	# (they get populated later)
 	cdef void     __allocate_batched_storage( self ): #noexcept:
 
 		cdef tuple Hshape  = ( self.nBatches, self.BatchSize, self.Lmax, EVEC_SIZE ),                                  \
@@ -746,7 +767,7 @@ cdef class DATAMACHINE:
 			self.W_batched  [ b ][ :bsize ] = self._W  [ bstart:bstop ] # sample weights
 			self.M_batched  [ b ][ :bsize ] = self._M  [ bstart:bstop ] # history masks
 
-	# Just so we can check that all the metadata looks good
+	# Just so we can check that all the metadata looks good, mostly a testing/debugging tool
 	cdef void     __constructor_summary( self ): #noexcept:
 
 		cdef bint H_Exists  = self._H  is not None,                                                                    \
@@ -805,35 +826,39 @@ cdef class DATAMACHINE:
 			uint1 bW    = self.W_batched  [ bIdx,:bsize ]
 			uint2 bM    = self.M_batched  [ bIdx,:bsize ]
 
-		return DataBatch( bH, bhCc,bhCr,bhCs, bfCc,bfCr,bfCs, btCc,btCr,btCs, brCc,brCr,brCs, bA, bV, bW, bM, self.GPU )
+		# TODO: Seriously this function signature is a warcrime, roll this up into a tuple or something
+		return DataBatch( bH, bhCc,bhCr,bhCs, bfCc,bfCr,bfCs, btCc,btCr,btCs, brCc,brCr,brCs, 
+						  bA, bV, bW, bM, self.GPU )
 
 	cdef void      _summary( self ): #noexcept:
 
 		print( '\n'+('='*50) )
 		print( "DATAMACHINE SUMMARY".center(50) )
 		print( ('='*50)+'\n' )
-		print( f"\tWORLD_SIZE:.......{self.WORLD_SIZE}" )
-		print( f"\tRANK:.............{self.RANK}" )
-		print( f"\tGPU:..............{self.GPU}" )
-		print( f"\tSamples:..........{self.nSamples}" )
-		print( f"\tBatchSize:........{self.BatchSize}" )
-		print( f"\tnBatches:.........{self.nBatches}" )
-		print( f"\t_final_bsize:.....{self._final_bsize}" )
-		print( f"\t_batches_uniform:.{self._batches_uniform}" )
-		print( f"\thLenMax:..........{self.Lmax}" )
-		print( f"\tH_batched.shape:..{tuple( self.H_batched.shape )[ :self.H_batched.ndim ]}" )
-		print( f"\tC_batched.shape:..{tuple( self.C_batched.shape )[ :self.C_batched.ndim ]}" )
-		print( f"\tA_batched.shape:..{tuple( self.A_batched.shape )[ :self.A_batched.ndim ]}" )
-		print( f"\tV_batched.shape:..{tuple( self.V_batched.shape )[ :self.V_batched.ndim ]}" )
-		print( f"\tW_batched.shape:..{tuple( self.W_batched.shape )[ :self.W_batched.ndim ]}" )
-		print( f"\tM_batched.shape:..{tuple( self.M_batched.shape )[ :self.M_batched.ndim ]}" )
+		print( f"\tWORLD_SIZE:........{self.WORLD_SIZE}" )
+		print( f"\tRANK:..............{self.RANK}" )
+		print( f"\tGPU:...............{self.GPU}" )
+		print( f"\tSamples:...........{self.nSamples}" )
+		print( f"\tBatchSize:.........{self.BatchSize}" )
+		print( f"\tnBatches:..........{self.nBatches}" )
+		print( f"\t_final_bsize:......{self._final_bsize}" )
+		print( f"\t_batches_uniform:..{self._batches_uniform}" )
+		print( f"\thLenMax:...........{self.Lmax}" )
+		print( f"\tH_batched.shape:...{tuple( self.H_batched.shape )[ :self.H_batched.ndim ]}" )
+		print( f"\tC_batched.shape:...{tuple( self.C_batched.shape )[ :self.C_batched.ndim ]}" )
+		print( f"\tA_batched.shape:...{tuple( self.A_batched.shape )[ :self.A_batched.ndim ]}" )
+		print( f"\tV_batched.shape:...{tuple( self.V_batched.shape )[ :self.V_batched.ndim ]}" )
+		print( f"\tW_batched.shape:...{tuple( self.W_batched.shape )[ :self.W_batched.ndim ]}" )
+		print( f"\tM_batched.shape:...{tuple( self.M_batched.shape )[ :self.M_batched.ndim ]}" )
 
 
 	# ---------- PYTHON INTERFACE ----------------------------------------------
-	# These are all we need to expose to the pure-python NN training loop
+	# These are all we need to expose to the pure-python NN training loop.
+	# Everything else is a C-level internal helper to enable us to expose batches.
 
 	def get_batch( self, uint bIdx ): 
 		return self._get_batch( bIdx )
+
 	def summary( self ): 
 		self._summary()
 
@@ -852,6 +877,8 @@ cdef class CFR_metadata:
 	def __init__( self, str metafile ): 
 		self.__INIT__( metafile )
 		
+	# The lists here hold metadata values per CFR iteration
+	# TODO: Some of these vars really should be renamed
 	cdef void __INIT__( self, str metafile ): #noexcept:
 
 		self.METAFILE              = metafile
@@ -863,20 +890,20 @@ cdef class CFR_metadata:
 		self.nTravsDone       = []
 		self.nNodesSeen       = []
 		self.TreeComplexities = []
-		self.KDurs_s          = []
-		self.KDurs_p          = []
-		self.kTimeIsoAvgs_s   = []
-		self.kTimeIsoAvgs_p   = []
+		self.KDurs_s          = [] # serialized KPhase durations, for speedup comparison vs parallel
+		self.KDurs_p          = [] # real parallel total KPhase durations
+		self.kTimeIsoAvgs_s   = [] # serialized avg time taken for one traversal
+		self.kTimeIsoAvgs_p   = [] # real parallel avg time taken for one traversal
 
-		# Calc phase (aka aPhase) stuff (note: "collection phase" = KPhase + aPhase)
+		# Calc phase (aka aPhase) stuff ("collection phase" = KPhase + aPhase)
 		self.nSolvedPositions  = []
 		self.nSolvedSubgames   = []
 		self.nCollectedSamples = []
-		self.ExplorationDepths = []
-		self.aDurs_s           = []
-		self.aDurs_p           = []
-		self.ColDurs_s         = []
-		self.ColDurs_p         = []
+		self.ExplorationDepths = [] # solved positions in each game round
+		self.aDurs_s           = [] # serialized adv target calc time, for comparison vs parallel
+		self.aDurs_p           = [] # real parallel adv target calcualtion time
+		self.ColDurs_s         = [] # serialized total collection phase duration
+		self.ColDurs_p         = [] # real parallel total collection phase duration
 
 		# Train phase (aka nnPhase) stuff
 		self.TrainDurations = []
@@ -884,14 +911,14 @@ cdef class CFR_metadata:
 		self.EndLosses      = []
 		self.MinLosses      = []
 		self.MaxLosses      = []
-		self.MinLossInds    = []
-		self.MaxLossInds    = []
+		self.MinLossInds    = [] # epochs where min loss achieved
+		self.MaxLossInds    = [] # epochs where max loss achieved
 
 		# Overall iter stuff
-		self.tDurs_s        = []
-		self.tDurs_p        = []
-		self.kTimeAggAvgs_s = []
-		self.kTimeAggAvgs_p = []
+		self.tDurs_s        = [] # serialized total iter durations, for speedup comparison vs parallel
+		self.tDurs_p        = [] # real parallel total iter durations
+		self.kTimeAggAvgs_s = [] # "aggregate" CFR iter time per trav (tDur_s/nTravsDone), serialized
+		self.kTimeAggAvgs_p = [] # "aggregate" CFR iter time per trav (tDur_p/nTravsDone), true parallel
 
 	# TODO: This involves another dangerous clear-then-save operation. Temp backup file before clear?
 	cdef void   save( self ): #noexcept:
@@ -900,17 +927,17 @@ cdef class CFR_metadata:
 			pickle.dump( self, metafile, protocol=-1 )
 		
 	# CFR iters are done in worker segments - each keeps their own records so need to get those first
-	cdef list __get_segment_files( self ): #noexcept:
+	cdef list __get_segment_files( self, str recordDir ): #noexcept:
 		cdef str segfile
-		return [ SEG_REC_DIR+segfile for segfile in listdir( SEG_REC_DIR ) ]
+		return [ recordDir + '/' + segfile for segfile in listdir( recordDir ) ]
 
-	# Extracts metadata dicts from segmented worker record files
-	cdef list __get_segment_dicts( self ): #noexcept:
+	# Extracts metadata dicts from segmented individual worker record files
+	cdef list __get_segment_dicts( self, str recordDir ): #noexcept:
 
 		cdef:
 			dict segdict
 			str  sfile
-			list segfiles = self.__get_segment_files(), segdicts=[]
+			list segfiles = self.__get_segment_files( recordDir ), segdicts=[]
 
 		for sfile in segfiles:
 			with open( sfile,'rb' ) as segfile:
@@ -922,7 +949,7 @@ cdef class CFR_metadata:
 	# Combines segmented worker metadata dicts into one
 	cdef dict __unify_segment_dicts( self, list segdicts ): #noexcept:
 
-		cdef uint r, p, segs = len( segdicts )
+		cdef uint segs = len( segdicts ), r, p
 		cdef dict segdict, iterDict = {}
 
 		iterDict[ 'nTravsDone' ]                 = sum([ segdict[ 'SegmentTravsDone' ]  for segdict in segdicts ])
@@ -997,19 +1024,15 @@ cdef class CFR_metadata:
 		print( f"\t\tRiver:   {self.ExplorationDepths[ t ][ RIVER ]}" )
 
 	# On completion of iter collect phase: load segmented mdata ⟶ unify & save it ⟶ destroy segmented data
-	cdef void  _collection_phase_completed( self ): #noexcept:
+	cdef void  _collection_phase_completed( self, str recordDir ): #noexcept:
 
-		print( f"\nLoading segment record dicts from segrec dir: {cwd()+'/'+SEG_REC_DIR}..." )
-		cdef list segdicts = self.__get_segment_dicts()
+		print( f"\nLoading segment record dicts from segrec dir: {recordDir}..." )
+		cdef list segdicts = self.__get_segment_dicts( recordDir )
 		print( f"{len( segdicts )} segrec dicts loaded successfully." )
 
 		print( f"\nUnifying segmented records..." )
 		cdef dict iterDict = self.__unify_segment_dicts( segdicts )
 		print( f"Segmented records unified successfully" )
-
-		print( f"\nDestroying {len( segdicts )} unneeded segrecs..." )
-		self.__destroy_unneeded_segrecs()
-		print( f"Segrecs destroyed." )
 
 		self.__update_collection_records( iterDict ) # Add this iter's mdata to pre-existing mdata
 		self.collection_summary()
@@ -1292,7 +1315,7 @@ cdef class CFR_metadata:
 
 		# Calculate derived quantities
 		cdef:
-			uint 
+			uint                                                                                                       \
 				t = self.CFRItersCompleted,                                                                            \
 				E = <uint>len( lHist ),                                                                                \
 				PARALLEL_TRAIN_SPEEDUP_FACTOR=5 # empirical approx speedup factor on 8x GPU vs 1x
@@ -1333,7 +1356,7 @@ cdef class CFR_metadata:
 		self.CurrentIter+=1
 		self.Iter_CPhase_Completed=0
 
-		# Save metadata and print in human-readable form
+		# Save, print, and do cleanup
 		self.save()
 		self.record_run()
 		self.print_iter()
@@ -1362,12 +1385,11 @@ cdef class CFR_metadata:
 	def get_current_pov( self ):
 		return (( self.CurrentIter + INITIAL_POV ) % NUM_PLAYERS ) + 1
 
-	def collection_phase_completed( self ):
-		self._collection_phase_completed()
+	def collection_phase_completed( self, str recordDir ):
+		self._collection_phase_completed( recordDir )
 
 	def CFR_iteration_completed( self, double trainTime, list lHist, list vlHist ): 
 		self._CFR_iteration_completed( trainTime, lHist, vlHist )
 
 
-# print( '\033[3m' + "DATA STRUCTS LOADED" + '\033[0m' )
 # *-* # 
