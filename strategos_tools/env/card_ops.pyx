@@ -184,48 +184,35 @@ cdef ll    HandProduct( uint2 hand ): #noexcept:
 cdef uint  HandIndex( uint2 hand ): #noexcept:
 	return HAND_IDX_MAP.at( HandProduct( hand ) )
 
-# Just takes some cardVecs, converts to deuce integers, then uses deuce's card formatting to make it pretty *-* 
-cdef list  PrettyCardStrings( uint2 cardVecs, bint Compact=FALSE, bint Center=TRUE ): #noexcept:
+# Unique Deuce card integer ⟶ [cardID,rankID,suitID] card vector
+cdef uint1 card_vector_from_deuceint( int deuceInt ): #noexcept:
+	
+	cdef uint1 cVec = pyarr( ARR_TMPLT_I, CVEC_SIZE, zero=True )
 
-	cdef uint nCards   = cardVecs.shape[ 0 ]
-	cdef bint No_Cards = nCards==0 or (NP( cardVecs )==0).all()
-	if No_Cards: return [' '*6]
+	if deuceInt==0:
+		return cVec
 
-	cdef int1 deuceInts = DeuceInts( cardVecs )
-	cdef int  c
-	return [ Deuce.int_to_pretty_str( c, Compact, Center ) for c in deuceInts ]
+	cdef int  dRank = Deuce.get_rank_int( deuceInt ), dSuit = Deuce.get_suit_int( deuceInt )
+	cdef uint rID = <uint>dRank, sID = <uint>log2( dSuit )
+	
+	cVec[ CARD ] = CardID( rID,sID )
+	cVec[ RANK ] = rID
+	cVec[ SUIT ] = sID
 
-# Returns array of best-scoring hand that can be formed from the given card sets
-cdef uint2 BestHand( uint2 holeCards, uint2 boardCards ): #noexcept:
+	return cVec
 
-	cdef:
-		int   deuceInt
-		uint2 cardVecs   = CombineCards( holeCards, boardCards )
-		int1  deuceCards = DeuceInts( cardVecs ), bestHand = EVALUATOR.get_best_hand( deuceCards )
-		list  cStrings   = [ Deuce.int_to_str( deuceInt ) for deuceInt in bestHand ]
+# Just calls the above function in a loop to do multiple Deuce integer ⟶ card vector conversions
+cdef uint2 cvecs_from_deuceints( int1 deuceInts ): #noexcept:
+	
+	cdef uint  nCards = deuceInts.size, c
+	cdef uint2 cVecs  = cyarr( (nCards,CVEC_SIZE), UINTSIZE, 'I' )
 
-	return card_vectors_from_strings( cStrings )
+	for c from 0 <= c < nCards: 
+		cVecs[ c ] = card_vector_from_deuceint( deuceInts[ c ] )
 
-# Helper for find_winning_cards
-cdef list  RankSuitStrings( uint2 cardVecs ): #noexcept:
+	return cVecs
 
-	cdef:
-		uint  nCards = cardVecs.shape[ 0 ], c, rID, sID
-		uint1 cVec
-		str   rStr, sStr
-		list  cStrings = []
-
-	for c from 0 <= c < nCards:
-		cVec = cardVecs[ c ]
-		rID  = cVec[ RANK ]
-		rStr = DEUCE_RANK_CHARS[ rID ]
-		sID  = cVec[ SUIT ]
-		sStr = DEUCE_SUIT_CHARS[ sID ]
-		cStrings.append( rStr+sStr )
-
-	return cStrings
-
-# Helper for find_winning_cards
+# Converts one 'Rs' (i.e. rankChar + suitChar) card string into a [cardID,rankID,suitID] card vector
 cdef uint1 card_vector_from_str( str cardString ): #noexcept:
 	
 	cdef:
@@ -238,7 +225,7 @@ cdef uint1 card_vector_from_str( str cardString ): #noexcept:
 	cVec[ SUIT ] = sID
 	return cVec
 
-# Helper for find_winning_cards
+# Returns 2d array of [cardID,rankID,suitID] card vectors from list of 'Rs' card identifier strings
 cdef uint2 card_vectors_from_strings( list cardStrings ): #noexcept:
 	
 	cdef: 
@@ -252,6 +239,50 @@ cdef uint2 card_vectors_from_strings( list cardStrings ): #noexcept:
 
 	return cVecs
 
+# Converts 'Rs' strings to Deuce integers
+cdef int   card_int_from_str( str cardString ): #noexcept:
+	
+	cdef uint2 cVec = cyarr( (1,CVEC_SIZE), UINTSIZE, 'I' ) # This has to be 2d so we can use it as input to DeuceInts
+	cVec[ 0 ] = card_vector_from_str( cardString )
+	return DeuceInts( cVec )[0]
+
+# Returns array of best-scoring hand that can be formed from the given card sets
+cdef uint2 BestHand( uint2 holeCards, uint2 boardCards ): #noexcept:
+
+	cdef:
+		int   deuceInt
+		uint2 cardVecs   = CombineCards( holeCards, boardCards )
+		int1  deuceCards = DeuceInts( cardVecs ), bestHand = EVALUATOR.get_best_hand( deuceCards )
+		list  cStrings   = [ Deuce.int_to_str( deuceInt ) for deuceInt in bestHand ]
+
+	return card_vectors_from_strings( cStrings )
+
+# Returns a string naming the kind of hand (i.e. 'FLUSH', 'STRAIGHT', etc) represented by hScore
+cdef str   RankClass( int hScore ): #noexcept:
+	return EVALUATOR.class_to_string( EVALUATOR.get_rank_class( hScore ) )
+
+# Converts 2d array of [cardID,rankID,suitID] card vectors to list of 'Rs' card identifier strings
+cdef list  RankSuitStrings( uint2 cardVecs ): #noexcept:
+
+	cdef:
+		uint  nCards = cardVecs.shape[ 0 ], c, rID, sID
+		uint1 cVec
+		str   rStr, sStr
+		list  cStrings = []
+
+	for c from 0 <= c < nCards:
+		cVec = cardVecs[ c ]
+
+		rID  = cVec[ RANK ]
+		rStr = DEUCE_RANK_CHARS[ rID ]
+
+		sID  = cVec[ SUIT ]
+		sStr = DEUCE_SUIT_CHARS[ sID ]
+
+		cStrings.append( rStr + sStr )
+
+	return cStrings
+
 # Helper for find_winning_cards
 cdef uint2 find_high_card( uint2 holeCards ): #noexcept:
 	
@@ -263,6 +294,7 @@ cdef uint2 find_high_card( uint2 holeCards ): #noexcept:
 	for c from 0 <= c < nCards:
 		cVec = holeCards[ c ]
 		rID  = cVec[ RANK ]
+
 		if rID >= highRank:
 			highRank    = rID
 			highCard[0] = cVec
@@ -342,12 +374,27 @@ cdef uint2 find_winning_cards( uint2 from_winning_hand, uint2 with_hole_cards, s
 		# Remaining rank classes = 5card hands. |from_winning_hand| = 5 cards by def, so return to sender
 		return from_winning_hand
 
+# Just takes some cardVecs, converts to deuce integers, then uses deuce's card formatting to make it pretty *-* 
+cdef list  PrettyCardStrings( uint2 cardVecs, bint Compact=FALSE, bint Center=TRUE ): #noexcept:
+
+	cdef uint nCards   = cardVecs.shape[ 0 ]
+	cdef bint No_Cards = nCards==0 or (NP( cardVecs )==0).all()
+	if No_Cards: return [' '*6]
+
+	cdef int1 deuceInts = DeuceInts( cardVecs )
+	cdef int  c
+	return [ Deuce.int_to_pretty_str( c, Compact, Center ) for c in deuceInts ]
+
 
 # ----- PYTHON INTERFACE FUNCTIONS -----------------------------------------------------------------
+# A couple of the functions above are useful to be able to call from Python scripts
 
 
-def cvecs_from_strings( cStrings ): return NP( card_vectors_from_strings( cStrings ),dtype=uintc )
-def pretty_card_strings( cardVecs, compact=TRUE, center=FALSE ): return PrettyCardStrings( cardVecs, compact, center )
+def cvecs_from_strings( cStrings ): 
+	return NP( card_vectors_from_strings( cStrings ),dtype=uintc )
+
+def pretty_card_strings( cardVecs, compact=TRUE, center=FALSE ): 
+	return PrettyCardStrings( cardVecs, compact, center )
 
 
 # *-* # 
