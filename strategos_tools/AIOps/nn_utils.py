@@ -52,7 +52,7 @@ def AdvNetCompiler( aNet, GPUrank=0, mode='max-autotune' ):
 	print( f"Compile mode: {mode}" )
 
 	print( f"Constructing compiled model..." )
-	aNetCompiled = pt.compile( aNet,mode='max-autotune' )
+	aNetCompiled = pt.compile( aNet,mode=mode )
 	print( f"Compiled model constructed." )
 
 	print( f"\n=== INITIALIZING COMPILED INFERENCE GRAPH ===" )
@@ -89,7 +89,7 @@ def MMCompiler( mm, iterSpan, GPUrank=0, mode='max-autotune' ):
 	print( f"Compile mode: {mode}" )
 
 	print( f"Constructing compiled MM..." )
-	mmCompiled = pt.compile( mm,mode='max-autotune' )
+	mmCompiled = pt.compile( mm,mode=mode )
 	print( f"Compiled MM constructed." )
 
 	print( f"\n=== INITIALIZING COMPILED INFERENCE GRAPH ===" )
