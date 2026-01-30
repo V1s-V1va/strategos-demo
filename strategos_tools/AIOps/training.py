@@ -15,7 +15,7 @@ from lightning.fabric import Fabric
 # ==================================================================================================
 # All the tools needed to train strategos's nn models from collected data live here. Entry points
 # are purely training phase; we assume data has already been collected, appropriately preprocessed,
-# and is ready to be directly loaded into the training pipeline. All tools and processes here can
+# and is ready to be directly loaded into the training pipeline. All tools and processes here can 
 # be run on any number of GPUs.
 # ==================================================================================================
 
@@ -26,8 +26,8 @@ from lightning.fabric import Fabric
 # and metadata, and various other ancillary tasks. 
 class TrainManager:
 
-	def __init__( self, aNet, CFRiter, totalEpochs, modelFile, mData, metaFile ):
-		self.__new_init__( aNet, CFRiter, totalEpochs, modelFile, mData, metaFile )
+	def __init__( self, aNet, CFRiter, totalEpochs, mData, dataDir, modelFile, metaFile ):
+		self.__new_init__( aNet, CFRiter, totalEpochs, mData, dataDir, modelFile, metaFile )
 
 		# Checkpointing system still buggy, for now we just assume we're doing a new training run
 		#if not aNet.EpochsTrained: 
@@ -36,7 +36,7 @@ class TrainManager:
 			#self.__res_init__( aNet, CFRiter, totalEpochs, modelFile, mData, metaFile )
 
 	# Initializer for a new training phase, rather than resuming a pre-existing one
-	def __new_init__( self, aNet, CFRiter, totalEpochs, modelFile, mData, metaFile ):
+	def __new_init__( self, aNet, CFRiter, totalEpochs, mData, dataDir, modelFile, metaFile ):
 
 		self.EPOCHS  = totalEpochs
 		self.CFRIter = CFRiter
@@ -51,6 +51,8 @@ class TrainManager:
 
 		self.CFR_mData = mData
 		self.MetaFile  = metaFile
+		
+		self.DataDir = dataDir
 
 		# Ongoing training process records
 		self.EpochsDone    = 0
@@ -77,7 +79,7 @@ class TrainManager:
 
 	# Initializer for resuming an interrupted pre-existing training phase.
 	# NOTE: This functionality is not currently implemented
-	def __res_init__( self, aNet, CFRiter, totalEpochs, modelFile, mData, metaFile ):
+	def __res_init__( self, aNet, CFRiter, totalEpochs, mData, dataDir, modelFile, metaFile ):
 
 		modelDict = aNet.get_model_dict()
 		trainDict = modelDict[ 'trainDict' ]
@@ -95,6 +97,8 @@ class TrainManager:
 
 		self.CFR_mData = mData
 		self.MetaFile  = metaFile
+
+		self.DataDir = dataDir
 
 		self.EpochsDone    = aNet.EpochsTrained
 		self.LHist         = trainDict[ 'LHist'  ]
@@ -185,7 +189,7 @@ class TrainManager:
 			eTimeAvg = tDone / eDone
 			tRem     = eRem * eTimeAvg
 
-			lrStr  = f"Current learning rate(?): {currentLR:.7f}"
+			lrStr  = f"Current learning rate:    {currentLR:.7f}"
 			maxStr = f"Maximum [L|VL] [Le|VLe]:  [{self.MaxL:.7f}|{self.MaxVL:.7f}] [{self.MaxLe}|{self.MaxVLe}]       "
 			minStr = f"Minimum [L|VL] [Le|VLe]:  [{self.MinL:.7f}|{self.MinVL:.7f}] [{self.MinLe}|{self.MinVLe}]       "
 			Lstr   = f"Current [L|VL]:           [{eLossAvg:.7f}|{eVLossAvg:.7f}]                                      "
@@ -294,8 +298,10 @@ class TrainManager:
 			else:
 				print( f"Total time taken: {self.TrainTime:.0f}sec." )
 
+			cleanupDir = self.DataDir + "/segadvs"
 			self.CFR_mData.CFR_iteration_completed( self.TrainTime, self.LHist, self.VLHist )
-			post_iter_cleanup( for_iter=self.CFRIter )
+			post_iter_cleanup( advDir=cleanupDir, for_iter=self.CFRIter )
+			print()
 
 	def end_summary( self ):
 
@@ -304,7 +310,7 @@ class TrainManager:
 		oP = (self.oTime / self.TrainTime) * 100
 		dP = (self.dTime / self.TrainTime) * 100
 
-		sleep( self.RANK )
+		sleep( self.RANK ) # this times printing so process summaries don't overlap each other
 		print( "="*50 )
 		print( f"POST-TRAINING SUMMARY FOR RANK {self.RANK}".center(50) )
 		print( "="*50 )
@@ -323,7 +329,7 @@ class TrainManager:
 		print()
 
 
-def _get_training_parameters( metaFile, modelSize, epoch_override, bsize_override, lRate_override ):
+def _get_training_parameters( dataDir, metaFile, modelSize, epoch_override, bsize_override, lRate_override ):
 
 	nGPU        = pt.cuda.device_count()
 	totalEpochs = epoch_override or TRAIN_EPOCHS
@@ -331,8 +337,8 @@ def _get_training_parameters( metaFile, modelSize, epoch_override, bsize_overrid
 	modelIter   = mData.get_current_iter()
 	modelName   = f"M{modelSize}T{modelIter}"
 	iterPOV     = (( modelIter+INITIAL_POV ) % NUM_PLAYERS) + 1
-	trainFile   = f"p{iterPOV}advs_TRAIN.pickle"
-	valFile     = f"p{iterPOV}advs_VAL.pickle"
+	trainFile   = dataDir + f"/p{iterPOV}advs_TRAIN.pickle"
+	valFile     = dataDir + f"/p{iterPOV}advs_VAL.pickle"
 	tsamples    = load_nn_samples( from_file=trainFile )
 	vsamples    = load_nn_samples( from_file=valFile )
 	ntSamples   = len( tsamples )
@@ -362,28 +368,31 @@ def _get_training_parameters( metaFile, modelSize, epoch_override, bsize_overrid
 
 # Executes the actual training loop. Instantiates new untrained AdvNet, sets up distributed Fabric 
 # training environment, loads distributed training data, and executes epoch-by-epoch logic.
-def ModelTrainer( metaFile, modelFile, modelSize, epoch_override=0, bsize_override=0, lRate_override=0 ):
+def ModelTrainer( dataDir, modelSize, epoch_override=0, bsize_override=0, lRate_override=0 ):
 
 	# Torch flags shown to improve training performance
 	pt.set_float32_matmul_precision( 'high' )
 	pt.backends.cudnn.benchmark = True
 
 	# First, get parameters and variables we need, and set up training entities
-	trainVars = _get_training_parameters( metaFile, modelSize, epoch_override, bsize_override, lRate_override )
+	metaFile  = dataDir + '/metadata.pickle'
+	modelFile = dataDir + '/models.pickle'
+	trainVars = _get_training_parameters( dataDir, metaFile, modelSize, 
+										  epoch_override, bsize_override, lRate_override )
 	aNet      = AdvNet( modelIter=trainVars[ 'modelIter' ], modelSize=modelSize, for_training=True )
 	aNet      = SyncBatchNorm.convert_sync_batchnorm( aNet )
 	huber     = pt.nn.HuberLoss( reduction='none' )
 	opt       = pt.optim.Adam( aNet.parameters(), lr=trainVars[ 'lRate' ], eps=1e-08, foreach=True )
 	lRate     = trainVars[ 'lRate' ]
 	TM        = TrainManager( aNet, trainVars[ 'modelIter' ], trainVars[ 'totalEpochs' ], 
-							  modelFile, trainVars[ 'mData' ], metaFile )
+							  trainVars[ 'mData' ], dataDir, modelFile, metaFile )
 
 	# Set up and launch Fabric distributed environment
 	# Multi-processes get spun up here, everything after this runs independently per-process
 	Fab = Fabric( accelerator='cuda', devices=trainVars[ 'nGPU' ], 
 				  strategy='ddp', precision='16-mixed', callbacks=[TM] )
 	Fab.launch()
-	R = Fab.global_rank # this process's rank (just a process ID, basically)
+	R = Fab.global_rank # this process's rank (just this process's GPU ID, basically)
 
 	# Set up distributed AdvNet and optimizer entities
 	Fab.print( f"\nFabric engine launched." )
