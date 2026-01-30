@@ -1,7 +1,6 @@
 #distutils: language = c
 #cython: language_level 3
 
-
 cimport cython
 from strategos_tools.core.CONSTS cimport *
 
@@ -61,9 +60,15 @@ cdef uint  MIN( uint1 a ) #noexcept
 
 cdef uint  MAX( uint1 a ) #noexcept
 
+cdef uint2 Has_Nonzero( flt2 arr, uint along_axis=* ) #noexcept
+
+cdef flt2  NumNonzero( flt2 arr, uint along_axis=* ) #noexcept
+
 cdef flt2  Unzero2d( flt2 a ) #noexcept
 
 cdef flt3  Unzero3d( flt3 a ) #noexcept
+
+cdef void  UnzeroAdvs( flt2 advSums ) #noexcept
 
 
 # ==================================================================================================
@@ -82,6 +87,3 @@ cdef void _clear_current_line() #noexcept
 cdef void _move_console_cursor_up( uint numLines ) #noexcept
 
 cdef void _clear_prev_lines( uint numLines ) #noexcept
-
-
-# *-* #

@@ -134,6 +134,16 @@ cdef uint  MAX( uint1 a ): #noexcept:
 
 	return arrmax
 
+# output[i] is 1 if input has any nonzero elements in the i-th element of the specified axis.
+# Designed for a specific purpose for EstimatorOps; keeps an extra empty dim for this reason. 
+cdef uint2 Has_Nonzero( flt2 arr, uint along_axis=0 ): #noexcept:
+	return NP( (NP( arr )>0).any( axis=along_axis, keepdims=TRUE ),dtype=uintc )
+
+# Counts the number of nonzero elements along specified axis. 
+# Designed for a specific purpose for EstimatorOps; keeps an extra empty dim for this reason.
+cdef flt2  NumNonzero( flt2 arr, uint along_axis=0 ): #noexcept:
+	return NP( np.count_nonzero( arr, axis=along_axis, keepdims=1 ),dtype=f32 )
+
 # Returns copy of a with 1s replacing 0s; useful for avoiding 0-div errors where 0s in a can be ignored
 cdef flt2  Unzero2d( flt2 a ): #noexcept:
 
@@ -143,6 +153,7 @@ cdef flt2  Unzero2d( flt2 a ): #noexcept:
 		for j from 0 <= j < a.shape[ 1 ]:
 			if a[ i,j ]==0.0: 
 				aUnzeroed[ i,j ]=1.0
+
 	return aUnzeroed
 
 # Returns copy of a with 1s replacing 0s; useful for avoiding 0-div errors where 0s in a can be ignored
@@ -155,7 +166,15 @@ cdef flt3  Unzero3d( flt3 a ): #noexcept:
 			for k from 0 <= k < a.shape[ 2 ]:
 				if a[ i,j,k ]==0.0: 
 					aUnzeroed[ i,j,k ]=1.0
+
 	return aUnzeroed
+
+# Specific helper util for EstimatorOps to avoid 0-div errors
+cdef void UnzeroAdvs( flt2 advSums ): #noexcept:
+	cdef uint nI = advSums.shape[ 0 ], I
+	for I from 0 <= I < nI:
+		if advSums[ I,0 ]==0: 
+			advSums[ I,0 ] = 1
 
 
 # ==================================================================================================
