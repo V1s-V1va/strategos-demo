@@ -18,9 +18,9 @@ cdef object ADVNET, MULTIMODEL, ALT_MULTIMODEL
 # ==================================================================================================
 
 
-cdef void setup_advnet( str modelFile, uint modelIter, uint modelSize=*, uint GPUrank=*, bint compiled=* ) #noexcept
-cdef void setup_multimodel( str modelFile, uint iterSpan, uint modelSize=*, uint GPUrank=*, bint compiled=* ) #noexcept
-cdef void setup_alt_multimodel( str modelFile, uint iterSpan, uint modelSize=*, uint GPUrank=*, bint compiled=* ) #noexcept
+cdef void setup_advnet( str modelFile, uint modelIter, uint modelSize=*, uint GPUrank=*, bint Compiled=* ) #noexcept
+cdef void setup_multimodel( str modelFile, uint iterSpan, uint modelSize=*, uint GPUrank=*, bint Compiled=* ) #noexcept
+cdef void setup_alt_multimodel( str modelFile, uint iterSpan, uint modelSize=*, uint GPUrank=*, bint Compiled=* ) #noexcept
 
 
 # ==================================================================================================

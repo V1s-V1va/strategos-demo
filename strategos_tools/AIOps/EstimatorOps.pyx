@@ -38,22 +38,22 @@ from torch.cuda import empty_cache as empty_GPU_cache
 # These are singletons so they can be directly called from within this module or externally.
 
 
-cdef void setup_advnet( str modelFile, uint modelIter, uint modelSize=64, uint GPUrank=0, bint compiled=FALSE ): #noexcept:
+cdef void setup_advnet( str modelFile, uint modelIter, uint modelSize=64, uint GPUrank=0, bint Compiled=FALSE ): #noexcept:
 	cdef object aNet = AdvNet( modelSize=modelSize, modelIter=modelIter, load_from_file=modelFile )
 	aNet.to( f"cuda:{GPUrank}" )
 	global ADVNET
 	ADVNET = aNet #if not compiled else AdvNetCompiler( aNet,GPUrank )
 
-cdef void setup_multimodel( str modelFile, uint iterSpan, uint modelSize=64, uint GPUrank=0, bint compiled=FALSE ): #noexcept:
+cdef void setup_multimodel( str modelFile, uint iterSpan, uint modelSize=64, uint GPUrank=0, bint Compiled=FALSE ): #noexcept:
 	cdef object MM = MultiModel( modelSize=modelSize, mFile=modelFile, iterSpan=iterSpan, GPUrank=GPUrank )
 	global MULTIMODEL
 	MULTIMODEL = MM #if not compiled else MMCompiler( MM,iterSpan,GPUrank )
 
 # Having two multimodel singletons allows us to evaluate one test model against another
-cdef void setup_alt_multimodel( str modelFile, uint iterSpan, uint modelSize=64, uint GPUrank=0, bint compiled=FALSE ): #noexcept:
+cdef void setup_alt_multimodel( str modelFile, uint iterSpan, uint modelSize=64, uint GPUrank=0, bint Compiled=FALSE ): #noexcept:
 	cdef object aMM = MultiModel( modelSize=modelSize, mFile=modelFile, iterSpan=iterSpan, GPUrank=GPUrank )
 	global ALT_MULTIMODEL
-	MULTIMODEL = aMM #if not compiled else MMCompiler( aMM,iterSpan,GPUrank )
+	ALT_MULTIMODEL = aMM #if not compiled else MMCompiler( aMM,iterSpan,GPUrank )
 
 
 # ==================================================================================================
