@@ -50,12 +50,6 @@ cdef flt3  __MultiAdvEstimator( uint actingPlayer, infoset I, uint GPUrank=*, bi
 
 cdef flt1  __MultiAdvSums( flt2 posMultiAdvs ) #noexcept
 
-cdef void  __Unzero( flt2 advSums ) #noexcept
-
-cdef uint2 __PositiveAdvLocator( flt2 multiAdvs ) #noexcept
-
-cdef flt2  __NumNonzero( flt2 arr, uint along_axis=* ) #noexcept
-
 cdef flt2  __MultiActionProbs( flt2 multiAdvs ) #noexcept 
 
 cdef flt3    MultiStrats( uint actingPlayer, infoset I, uint GPUrank=*, bint Alt_Model=*, bint Legacy_Model=* ) #noexcept

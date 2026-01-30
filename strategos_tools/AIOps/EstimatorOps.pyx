@@ -2,6 +2,7 @@
 # cython: language_level 3
 # cython: profile = False
 
+
 cimport cython
 from cython      cimport typeof
 from cython.view cimport array as cyarr
@@ -10,8 +11,7 @@ cimport numpy as cnp
 cnp.import_array()
 
 from strategos_tools.env.player_ops cimport Are_Opponents
-from strategos_tools.utils.funcs    cimport ( arange, ArrScale1d, ArrMax1d, ArrClip1d, ArrSum1d, ArrMult1d, 
-										      ArrAdd2d, ArrSub2d, ArrMult2d, ArrDiv2d, ArrEq2d )
+from strategos_tools.utils.funcs    cimport *
 from strategos_tools.AIOps.models   import  AdvNet, MultiModel
 from strategos_tools.AIOps.nn_utils import  AdvNetCompiler, MMCompiler
 
@@ -54,22 +54,6 @@ cdef void setup_alt_multimodel( str modelFile, uint iterSpan, uint modelSize=64,
 	cdef object aMM = MultiModel( modelSize=modelSize, mFile=modelFile, iterSpan=iterSpan, GPUrank=GPUrank )
 	global ALT_MULTIMODEL
 	ALT_MULTIMODEL = aMM #if not compiled else MMCompiler( aMM,iterSpan,GPUrank )
-
-
-# ==================================================================================================
-# ##################### [ ￬￬￬ ☢ RADIOACTIVE SYNTAX CONTAINMENT ZONE ☢ ￬￬￬ ] #########################
-# ==================================================================================================
-# Just some utils that give nice names to really ugly numpy operations
-# TODO: These should probably just be moved utils.funcs
-
-
-# Returns { 1 if ∃a∈A(I):α(I,a)>0 else 0 ∀ I∈multiAdvs } 
-cdef uint2 __PositiveAdvLocator( flt2 multiAdvs ): #noexcept:
-	cdef uint ACTIONS=1
-	return NP( (NP( multiAdvs )>0).any( axis=ACTIONS, keepdims=TRUE ),dtype=uintc )  # (|𝓘|,1)
-
-cdef flt2  __NumNonzero( flt2 arr, uint along_axis=0 ): #noexcept:
-	return NP( np.count_nonzero( arr, axis=along_axis, keepdims=1 ),dtype=f32 )
 
 
 # ==================================================================================================
@@ -159,15 +143,8 @@ cdef flt1 __MultiAdvSums( flt2 posMultiAdvs ): #noexcept:
 
 	for I from 0 <= I < nI: 
 		multiSum[ I ] = ArrSum1d( posMultiAdvs[ I ] )
-		
-	return multiSum
 
-# Sets advSums[I]=1 ∀I:advSums[I]=0 so it can be used as a denominator in ArrDiv without producing 0-div errors
-cdef void __Unzero( flt2 advSums ): #noexcept:
-	cdef uint nI = advSums.shape[ 0 ], I
-	for I from 0 <= I < nI:
-		if advSums[ I,0 ]==0: 
-			advSums[ I,0 ] = 1
+	return multiSum
 
 # Does the same as __ActionProbs but for multiple I in parallel; multiAdvs shape = (|𝓘|,|A|)
 cdef flt2 __MultiActionProbs( flt2 multiAdvs ): #noexcept: 
@@ -180,16 +157,17 @@ cdef flt2 __MultiActionProbs( flt2 multiAdvs ): #noexcept:
 		uint  A=1
 		flt2  aPlus          = NP( multiAdvs ).clip( min=0 )         # (|𝓘|,|A|)
 		flt2  advSums        = NP( aPlus ).sum( axis=A,keepdims=1 )  # (|𝓘|,1)
-		uint2 I_Has_Pos_Advs = __PositiveAdvLocator( multiAdvs )     # (|𝓘|,1);   =1 if ∃a∈A(I):α(I,a)>0
+		uint2 I_Has_Pos_Advs = Has_Nonzero( multiAdvs )              # (|𝓘|,1); =1 if ∃a∈A(I):α(I,a)>0 else 0
 
 	if NP( I_Has_Pos_Advs ).all():
 		return ArrDiv2d( aPlus, advSums ) # (|𝓘|,|A|); ∀I∈𝓘, ∃a∈A(I):α(I,a)>0
 
-	__Unzero( advSums ) # αSums[I]=1 ∀ I:αSums[I]=0. Works since αSums[I] isn't used for any I where αSums[I]=0
+
+	UnzeroAdvs( advSums ) # turn 0s to 1s to avoid 0-div errors
 	cdef:
 		flt2 maxIAdvs = NP( multiAdvs ).max( axis=A, keepdims=1 ) # (|𝓘|,1);   max( α(I,A) ) ∀ I∈𝓘 
 		flt2 Amax     = ArrEq2d( multiAdvs, maxIAdvs )            # (|𝓘|,|A|); {a∈A(I) | α(I,a)=max( α(I,A) )} ∀ I∈𝓘
-		flt2 nAmax    = __NumNonzero( Amax, along_axis=A )        # (|𝓘|,1);   |Amax(I)| ∀ I∈𝓘 
+		flt2 nAmax    = NumNonzero( Amax, along_axis=A )          # (|𝓘|,1);   |Amax(I)| ∀ I∈𝓘 
 		flt2 posProbs = ArrDiv2d( aPlus, advSums )                # (|𝓘|,|A|); see below
 		flt2 negProbs = ArrDiv2d( Amax, nAmax )                   # (|𝓘|,|A|); see below
 
@@ -250,5 +228,6 @@ cdef dbl2   AvgStrategy( infoset I, dbl1 iterReaches ): #noexcept:
 	stratArray[:,0 ] = avgStrat
 	stratArray[:,1:] = allIterStrats
 	return stratArray # (|A|,T+1)
+
 
 # *-* # 
