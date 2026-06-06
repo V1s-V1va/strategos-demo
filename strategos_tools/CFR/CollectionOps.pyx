@@ -9,7 +9,6 @@ from libc.stdlib   cimport rand as RNG, srand as SEEDRNG, RAND_MAX, malloc, real
 from cpython.array cimport clone as pyarr
 from cython.view   cimport array as cyarr
 
-cimport strategos_tools.utils.IO as IO
 cimport strategos_tools.AIOps.EstimatorOps as ESTIMATOR
 
 from strategos_tools.env.player_ops   cimport OpponentsOf, Are_Opponents
@@ -24,6 +23,7 @@ import os, pickle, numpy as np
 
 from time       import sleep, time as TimeNow
 from numpy      import asarray as NP, float32 as f32, expand_dims as newaxis, sum as sumaxis, intc
+from pathlib    import Path
 from torch.cuda import empty_cache as clear_GPU_cache
 
 
@@ -49,8 +49,8 @@ cdef class ZMap:
 		self.UZn  = vector_int()
 		self.size = 0
 
-	cdef bint contains( self, ll zKey ): #noexcept:
-		return self.Zn.contains( zKey )
+	cdef bint Contains( self, ll zKey ): #noexcept:
+		return self.Zn.Contains( zKey )
 
 	# Looks up the endgame payoff from the terminal node specified by zKey
 	cdef int  payout_from( self, ll zKey ): #noexcept:
@@ -123,29 +123,29 @@ cdef class ConnectionMap:
 		self.to_keys.replace( at_idx=replacementIdx, newItem=newKey )
 
 	# Does the origin node connect to to_key?
-	cdef bint connects_to( self, ll to_key ): #noexcept:
-		return self.to_keys.contains( to_key )
+	cdef bint Connects_To( self, ll key ): #noexcept:
+		return self.to_keys.Contains( key )
 
 
 # GameTree node. Basically wraps a gamenode with game path info we need for calculating nn targets
 cdef class GTNode:
 
 	# Some more complex structures here, so actually need a proper python-level init
-	def __init__( self, uint traversalPOV, gamenode fromNode, bint is_terminal, uint estimatorRank=0 ):
-		self.__INIT__( traversalPOV, fromNode, is_terminal, estimatorRank )
+	def __init__( self, uint traversalPOV, gamenode fromNode, bint Is_Terminal, uint estimatorRank=0 ):
+		self.__INIT__( traversalPOV, fromNode, Is_Terminal, estimatorRank )
 
-	cdef void __INIT__( self, uint traversalPOV, gamenode fromNode, bint is_terminal, uint estimatorRank=0 ): #noexcept:
+	cdef void __INIT__( self, uint traversalPOV, gamenode fromNode, bint Is_Terminal, uint estimatorRank=0 ): #noexcept:
 
-		cdef gamenode parentNode = fromNode.ParentNode( include_deals=0 )
+		cdef gamenode parentNode = fromNode.ParentNode( Include_Deals=FALSE )
 
 		self.TraversingPlayer = traversalPOV
 		self.GameNode         = fromNode
 		self.Key              = self.GameNode.GTKey()
 		self.ActingPlayer     = self.GameNode.ActingPlayer()
 		self.I_tp             = infoset( sourceNode=self.GameNode, perspective_of=self.TraversingPlayer )
-		self.GTParentKey      = parentNode.GTKey() if (is_terminal or parentNode.hLen > 1) else 0
+		self.GTParentKey      = parentNode.GTKey() if (Is_Terminal or parentNode.hLen > 1) else 0
 
-		if is_terminal:
+		if Is_Terminal:
 			self.__INIT_TERMINUS__()
 		else:          
 			self.__INIT_NON_TERMINUS__( estimatorRank )
@@ -181,7 +181,7 @@ cdef class GTNode:
 			if pathNode.ActingPlayer() != DEALER: 
 				pathKeys.append( pathNode.GTKey() )
 
-		if not pathKeys.contains( self.Key ): 
+		if not pathKeys.Contains( self.Key ): 
 			pathKeys.append( self.Key )
 
 		return pathKeys
@@ -235,7 +235,7 @@ cdef class GTNode:
 		self.TerminalPath = self.PathKeys()
 		self.uz           = self.GameNode.GameResults()[ self.TraversingPlayer ]
 
-		# Non-terminal properties which don't matter here, initialize to defaults
+		# Non-terminal properties which don't matter here, initialize to defaults.
 		self.Fully_Explored = TRUE # doing this for znodes simplifies later search for solvable subgames
 		self.Solvable       = TRUE # same here
 		self.FullAInds      = vector_int()
@@ -247,8 +247,8 @@ cdef class GTNode:
 		self.FwdReaches     = None
 		self.CFReaches      = None
 
-	cdef bint            has_direct_connection_to( self, ll key ): #noexcept:
-		return self.ConnectionGraph.connects_to( key )
+	cdef bint            Has_Direct_Connection_To( self, ll key ): #noexcept:
+		return self.ConnectionGraph.Connects_To( key )
 
 	# Replaces dealer node connection by replacing its key with the key of the next non-dealer node
 	cdef void            skip_dealer_connection( self, ll skip_deal_key, ll skip_to_key ): #noexcept:
@@ -277,14 +277,15 @@ cdef class GTNode:
 			zeroReaches = MultiMat( from_view=zeros )
 			self.FwdReaches = ConnectionMap( from_key=self.Key, to_keys=self.Zn, weights=zeroReaches )
 
-		# TODO: Do you need 𝓹(z) weights to tell you which hInds are 0? Prob not; π arrs above z will be 0 there anyway
+		# TODO: Do you need 𝓹(z) weights to tell you which hInds are 0?
+		# Prob not; π arrs above z will be 0 there anyway
 		else: # useful downstream if zNodes have π(z,z)=1 
 			ones        = cyarr( (nZ,nH,T), FLTSIZE, 'f' )
 			ones[:]     = 1
 			selfReaches = MultiMat( from_view=ones )
 			self.FwdReaches = ConnectionMap( from_key=self.Key, to_keys=self.Zn, weights=selfReaches )
 
-	# Just counts the number of times each player (including DEALER) has acted along 
+	# Counts num times each player (including DEALER) has acted along path to this node
 	cdef uint1           count_path_action_points( self ): #noexcept:
 
 		cdef uint1 actionPts = pyarr( ARR_TMPLT_I, self.GameNode.PLAYER_COUNT+1, zero=True )
@@ -354,7 +355,7 @@ cdef class GameTree:
 		self.GTKeys = vector_ll()
 		self.Nodes  = NodeVector()
 
-	cdef bint   contains( self, ll nodeKey ): #noexcept:
+	cdef bint   Contains( self, ll nodeKey ): #noexcept:
 		return self.GTKeys.contains( nodeKey )
 
 	cdef GTNode node_at( self, ll nodeKey ): #noexcept:
@@ -368,10 +369,10 @@ cdef class GameTree:
 # Orchestrates the CFR process of collecting game trajectory data by exploring the game tree
 cdef class CFRCollector:
 
-	def __init__( self, uint parallelRank, uint serialRank, uint nPlayers, uint gameSize, uint for_iter, uint POVplayer, uint segTravs ):
-		self.__INIT__( parallelRank, serialRank, nPlayers, gameSize, for_iter, POVplayer, segTravs )
+	def __init__( self, str dataDir, uint parallelRank, uint serialRank, uint nPlayers, uint gameSize, uint for_iter, uint POVplayer, uint segTravs ):
+		self.__INIT__( dataDir, parallelRank, serialRank, nPlayers, gameSize, for_iter, POVplayer, segTravs )
 
-	cdef void     __INIT__( self, uint parallelRank, uint serialRank, uint nPlayers, uint gameSize, uint for_iter, uint POVplayer, uint segTravs ): #noexcept:
+	cdef void     __INIT__( self, str dataDir, uint parallelRank, uint serialRank, uint nPlayers, uint gameSize, uint for_iter, uint POVplayer, uint segTravs ): #noexcept:
 
 		# Game/collection run parameters
 		self.RANK_P            = parallelRank # concurrent collection worker ID
@@ -388,7 +389,7 @@ cdef class CFRCollector:
 		self.POVplayer         = POVplayer    # ID we're playing as during collection
 		self.SegmentTravReq    = segTravs
 
-		# Ongoing collection metrics for this iteration
+		# Ongoing collection records/metadata for this iteration
 		self.SegmentTravsDone  = 0
 		self.RootNodeRolls     = 0
 		self.K_Phase_Complete  = 0
@@ -405,8 +406,11 @@ cdef class CFRCollector:
 		self.ASizes            = pyarr( ARR_TMPLT_f, self.nPlayers+1, zero=True )
 		self.ExplorationDepths = pyarr( ARR_TMPLT_I, NUM_ROUNDS, zero=True )
 
-		self.AdvFile    = SEG_ADV_DIR + f"p{POVplayer}advs_P{self.RANK_P}S{self.RANK_S}.pickle"
-		self.RecordFile = SEG_REC_DIR + f"segrecords_P{self.RANK_P}S{self.RANK_S}.pickle"
+		cdef str advFile = f"/p{POVplayer}advs_P{self.RANK_P}S{self.RANK_S}.pickle"
+		cdef str recFile = f"/segrecords_P{self.RANK_P}S{self.RANK_S}.pickle"
+
+		self.AdvFile    = dataDir + "/segadvs" + advFile # where this worker stores computed targets
+		self.RecordFile = dataDir + "/segrecs" + recFile # where this worker stores its metadata
 
 		# GameTree information
 		self.zKeys             = vector_ll()
@@ -415,8 +419,8 @@ cdef class CFRCollector:
 		self.SolvableSubgames  = vector_ll()
 		self.GTree             = GameTree()
 
-		#"Anyone who attempts to generate random numbers by deterministic means is, of course, living in a state of sin"
-		#For posterity: This looks insane, but all I'm doing is using a slow pyRNG to seed our faster internal C RNG 
+		# "Anyone who attempts to generate random numbers by deterministic means is, of course, living in a state of sin"
+		# For posterity: This looks insane, but all I'm doing is using a slow pyRNG to seed our faster internal C RNG 
 		self.pyRNG = np.random.default_rng()
 		cdef uint rngseed = <uint>self.pyRNG.integers( low=0,high=4294967295 )
 		SEEDRNG( rngseed )
@@ -429,7 +433,7 @@ cdef class CFRCollector:
 
 
 	cdef bint       Has_Encountered( self, ll nKey ): #noexcept:
-		return self.GTree.contains( nKey )
+		return self.GTree.Contains( nKey )
 
 	# Upon encountering a new node, add it to the subnodes of every path node above it in the tree
 	cdef void       extend_subgames( self, GTNode new_subnode ): #noexcept:
@@ -441,7 +445,7 @@ cdef class CFRCollector:
 
 		for s from 0 <= s < pathLen:
 			superKey = superKeys.at( s )
-			if (superKey != subKey) and self.GTree.contains( superKey ):
+			if (superKey != subKey) and self.GTree.Contains( superKey ):
 				self.at( superKey ).SubKeys.append( subKey )
 
 	cdef bint       Node_Has_Unexplored_Actions( self, ll nKey ): #noexcept:
@@ -456,18 +460,19 @@ cdef class CFRCollector:
 	cdef bint       Dealer_Node_Is_Parent_Of( self, GTNode N ): #noexcept:
 		if N.GTParentKey == 0:
 			return FALSE
-		else: # N's GTparent lacks a direct connection to N iff ∃ ≥1 deal node between them
-			return not self.at( N.GTParentKey ).has_direct_connection_to( N.Key )
+		# N's GTparent lacks a direct connection to N iff ∃ ≥1 deal node between them
+		else:
+			return not self.at( N.GTParentKey ).Has_Direct_Connection_To( N.Key )
 
 	# Another useful path-setup function for properly calculating reach probabilities 
 	cdef ll         find_deal_sequence_start( self, ll above_key ): #noexcept:
 
-		cdef gamenode prevNode = self.at( above_key ).GameNode.ParentNode( include_deals=TRUE ), dealNode
+		cdef gamenode prevNode = self.at( above_key ).GameNode.ParentNode( Include_Deals=TRUE ), dealNode
 
 		# Step backward through hist starting @ above_key until nondeal node found
 		while prevNode.ActingPlayer() == DEALER:
 			dealNode = prevNode
-			prevNode = prevNode.ParentNode( include_deals=TRUE )
+			prevNode = prevNode.ParentNode( Include_Deals=TRUE )
 
 		return dealNode.GTKey() # last dealnode found during reverse stepping is start of sequence
 
@@ -524,7 +529,7 @@ cdef class CFRCollector:
 
 			print( PB( kDone,kReq )+f" ({kDone}/{kReq})" + (' '*10),end='\r' )
 
-	# Called upon completion of one traversal
+	# Called each time a traversal completes
 	cdef void       trav_completed( self ): #noexcept:
 		self.SegmentTravsDone += 1
 		self.__print_collection_progress()
@@ -560,9 +565,9 @@ cdef class CFRCollector:
 			pathNode.append_reachable_endgame( zKey, zNode.uz )
 
 	# Just initializes a game tree entry for a newly encountered node
-	cdef void       initialize_entry( self, gamenode n, bint is_terminal ): #noexcept:
+	cdef void       initialize_entry( self, gamenode n, bint Is_Terminal ): #noexcept:
 
-		cdef GTNode newGTNode = GTNode( self.POVplayer, n, is_terminal, estimatorRank=self.RANK_P )
+		cdef GTNode newGTNode = GTNode( self.POVplayer, n, Is_Terminal, estimatorRank=self.RANK_P )
 		cdef uint   aPlayer   = newGTNode.ActingPlayer
 
 		self.nNodesSeen[ aPlayer ] += 1
@@ -570,22 +575,24 @@ cdef class CFRCollector:
 		self.GTree.append( newGTNode )
 		self.extend_subgames( new_subnode=newGTNode )
 
-		if is_terminal: 
+		if Is_Terminal: 
 			self.__complete_terminal_initialization( newGTNode )
 		else:			
 			self.ASizes[ aPlayer ] += newGTNode.A.size
 
-	# Just randomy samples an action index according to probabilities from_strategy
-	# TODO: You SUPER SUPER need to verify this does what you think it does. IF NOT, IT COMPLETELY BREAKS CFR CONVERGENCE
+	# Just randomly samples an action index according to probabilities from_strategy
+	# TODO: We should really have some kind of debug assert here that σ sums to 1.0
 	cdef int        ActionSample( self, flt1 from_strategy ): #noexcept:
 
 		cdef int   nA = from_strategy.shape[0], a
-		cdef float u = RNG()/(<float>RAND_MAX)
+		cdef float u = RNG()/(<float>RAND_MAX + 1.0) # +1.0 guarantees u ∈ [0,1) instead of [0,1]
 
 		for a from 0 <= a < nA:
 			u -= from_strategy[ a ]
 			if u <= 0: 
 				return a
+
+		return nA-1 # fallback to protect against weird stuff that can happen due to float noise
 
 	# Gets the next unexplored action index at for_key
 	cdef uint     __next_unexplored_index( self, ll for_key ): #noexcept:
@@ -614,23 +621,30 @@ cdef class CFRCollector:
 		if not self.K_Phase_Complete:
 			aPlayer = currentNode.ActingPlayer()
 
-			if currentNode.Is_Terminal(): #Endgame state found. Record payoff and path info for target calculation
-				self.initialize_entry( currentNode, is_terminal=TRUE )
+			# Endgame state: record payoff and path info for target calculation
+			if currentNode.Is_Terminal():
+				self.initialize_entry( currentNode, Is_Terminal=TRUE )
 
-			elif aPlayer==self.POVplayer: #POVplayer node found; explore entire A to find all reachable endgames
+			# POVplayer state: explore all a∈A to find all reachable endgames
+			elif aPlayer==self.POVplayer:
 				nKey = currentNode.GTKey()
-				if not self.Has_Encountered( nKey ): self.initialize_entry( currentNode, is_terminal=FALSE )
+				# Initialize new gametree node if we haven't been here before
+				if not self.Has_Encountered( nKey ): self.initialize_entry( currentNode, Is_Terminal=FALSE )
 
+				# Continue exploring a∈A as long as they exist and we haven't hit traversal limit
 				while (self.Node_Has_Unexplored_Actions( nKey ) and (not self.K_Phase_Complete)):
 					nextNode = self.NextSuccessor( for_key=nKey )
 					self.Collect( nextNode )
 
+				# Once we've explored all of A, mark node exploration as complete
 				if ((not self.Node_Has_Unexplored_Actions( nKey )) and (not self.K_Phase_Complete)):
 					self.node_fully_explored( nKey )
 
-			elif Are_Opponents( aPlayer, self.POVplayer ): #Opponent node found; sample one action from opp strat
+			# Opponent state: sample one action according to their strategy
+			elif Are_Opponents( aPlayer, self.POVplayer ):
 				nKey = currentNode.GTKey()
-				if not self.Has_Encountered( nKey ): self.initialize_entry( currentNode, is_terminal=FALSE )
+				# Initialize new gametree node if we haven't been here before
+				if not self.Has_Encountered( nKey ): self.initialize_entry( currentNode, Is_Terminal=FALSE )
 
 				oStrat = ESTIMATOR.Strat( self.at( nKey ).I_ap, GPUrank=self.RANK_P )
 				aIdx   = self.ActionSample( from_strategy=oStrat )
@@ -639,12 +653,14 @@ cdef class CFRCollector:
 				self.node_fully_explored( nKey ) #We only ever explore 1 action at opponent nodes
 				self.Collect( nextNode )
 
-			elif aPlayer==DEALER: #Dealer node found; generate dealevent & continue traversal, no collector entry needed
+			# Dealer state: generate deal event & continue traversal, no collector entry needed
+			elif aPlayer==DEALER:
 				self.nNodesSeen[ DEALER ]+=1; self.nNodesSeen[ currentNode.PLAYER_COUNT+1 ]+=1
 				dealEvent = currentNode.Deal()
 				nextNode  = currentNode.Successor( dealEvent )
 				self.Collect( nextNode )
 
+	# Called when traversal requirement satisfied, records metadata about traversal and performance
 	cdef void       K_phase_completed( self ): #noexcept:
 
 		cdef:
@@ -652,14 +668,16 @@ cdef class CFRCollector:
 			double kTime  = TimeNow()-self.SegmentStart, n
 			flt1   nNodes = self.NodesPerTraversal()
 
-		for p from 1 <= p <= self.nPlayers: self.ASizes[ p ] /= self.nNodesSeen[ p ] #avg out |A| per node ∀p
+		# Average out |A| per node ∀p
+		for p from 1 <= p <= self.nPlayers: self.ASizes[ p ] /= self.nNodesSeen[ p ]
+		# We define gametree complexity as num seen nodes * avg branching factor (i.e. avg nActions)
 		for p from 1 <= p <= self.nPlayers: self.TreeComplexity += <float>(self.nNodesSeen[ p ]) * self.ASizes[ p ]
 		self.TreeComplexity   /= self.SegmentTravsDone
 		self.TraversalDuration = <uint>kTime
 		self.AvgTravTimeIso    = kTime / self.SegmentTravsDone
 
 		print( '\n\n'+(f"="*50) )
-		print( f"T{t} SEGMENT TRAVERSAL PHASE COMPLETE".center(50) )
+		print( f"ITER {t} SEGMENT TRAVERSAL PHASE COMPLETE".center(50) )
 		print( f"="*50 )
 		print( f"Time taken: {HMS( kTime )} ( {self.AvgTravTimeIso:.5f}s/trav iso )" )
 		print( f"Nodes seen: {list( self.nNodesSeen )} ( avg {[ round( n,3 ) for n in nNodes ]}/trav )" )
@@ -684,6 +702,8 @@ cdef class CFRCollector:
 		self.RootNodeRolls+=1
 		return RootNode( initialConditions=iConds )
 
+	# Executes data collection via DFS gametree traversal.
+	# Generate a root node, explore tree under it, repeat until traversal requirement satisfied.
 	cdef void       Traverse( self ): #noexcept:
 
 		print( ('\n'*2)+('='*50) )
@@ -760,21 +780,21 @@ cdef class CFRCollector:
 
 		return TRUE
 
-	# Iterates through all fully explored nodes to find which are solvable
+	# Solvable node: a node at the top of a subtree whose nodes are all fully explored
 	cdef void       find_solvable_nodes( self ): #noexcept:
 
 		cdef uint nExploredNodes = self.FullyExploredKeys.size, k
-		cdef ll   expKey
+		cdef ll   exploredKey
 
 		print( f"\n\tFinding all solvable nodes in set of {nExploredNodes} fully explored nodes..." )
 		
-		# For every fully explored nodes, check whether all of its subnodes have been explored
+		# For every fully explored node, check whether all of its subnodes have been explored
 		for k from 1 <= k <= nExploredNodes:
-			expKey  = self.FullyExploredKeys.at( k-1 )
+			exploredKey = self.FullyExploredKeys.at( k-1 )
 			
-			if self.All_SubNodes_Explored( expKey ):
-				self.at( expKey ).Solvable = TRUE
-				self.SolvableKeys.append( expKey )
+			if self.All_SubNodes_Explored( exploredKey ):
+				self.at( exploredKey ).Solvable = TRUE
+				self.SolvableKeys.append( exploredKey )
 
 		print( f"\t{self.SolvableKeys.size} solvable nodes found, proceeding to solvable subgame search..." )
 
@@ -905,7 +925,7 @@ cdef class CFRCollector:
 			vector_ll PS          = self.at( Sr ).PathKeys()
 			uint      clown       = OpponentsOf( self.POVplayer )[ 0 ],                                                \
 					  oSteps      = self.__count_steps( by_player=clown, along_path=PS ),                              \
-					  pathLen     = PS.size
+					  pathLen     = PS.size,                                                                           \
 					  PATHSTEPS   = 0, nH = NUM_POSSIBLE_HANDS, oppStep = 1, step
 			flt3      pathWeights = cyarr( (oSteps+1, nH, T), FLTSIZE, 'f' )
 			ll        nextKey
@@ -1265,7 +1285,7 @@ cdef class CFRCollector:
 
 
 	# ----- SEGMENT LOGGING OPS ------------------------------------------------
-	# Allows CFRCollector to report metadata about collection runs
+	# Allows separate CFRCollectors to report metadata about segmented collection runs
 
 
 	# Records number of fully explored nodes for each betting round
@@ -1321,7 +1341,7 @@ cdef class CFRCollector:
 			uAvgs.append( uZS.UnweightedMeanU() )
 			
 			print( f"\n\nREACHABLE PAYOFF INFO FOR S WITH Sᵣ: (key={Sr})" )
-			self.at( Sr ).GameNode.summary( compact=TRUE )
+			self.at( Sr ).GameNode.summary( Compact=TRUE )
 			uZS.summary()
 
 		print( f"\nALL SUBGAME UNWEIGHTED AVG PAYOFFS:" )
@@ -1361,11 +1381,11 @@ cdef class CFRCollector:
 
 # The very last step after an iter's training phase completes is destruction of multi-worker temp
 # data. If any still exists, we know we're not ready to start this iter's collection run yet.
-cdef void __await_prev_iter_completion(): #noexcept:
+cdef void __await_prev_iter_completion( str advDir, str recDir ): #noexcept:
 	
 	cdef:
-		list   segAdvs        = os.listdir( SEG_ADV_DIR ) # num temp files currently present
-		bint   Prev_Iter_Done = len( segAdvs )==0
+		list   tempAdvFiles   = [ p.name for p in Path( advDir ).iterdir() ] # num temp files currently present
+		bint   Prev_Iter_Done = len( tempAdvFiles )==0
 		uint   SCAN_INTERVAL  = 5 # num seconds to wait before re-scanning temp data dir
 		double startTime      = TimeNow(), waitTime
 
@@ -1379,14 +1399,14 @@ cdef void __await_prev_iter_completion(): #noexcept:
 	while not Prev_Iter_Done:
 		sleep( SCAN_INTERVAL )
 
-		segAdvs        = os.listdir( SEG_ADV_DIR )
-		Prev_Iter_Done = len( segAdvs )==0
+		tempAdvFiles   = [ p.name for p in Path( advDir ).iterdir() ]
+		Prev_Iter_Done = len( tempAdvFiles )==0
 		waitTime       = TimeNow() - startTime
 
 		print( LINE_UP*2, end='\r' )
 
 		print( LINE_CLEAR, end='\r' )
-		print( f"MONITORING DIRECTORY: {os.getcwd() + '/' + SEG_REC_DIR}" )
+		print( f"MONITORING DIRECTORY: {recDir}" )
 
 		print( LINE_CLEAR, end='\r' )
 		print( f"ELAPSED WAIT TIME:    {HMS( waitTime )}" )
@@ -1395,26 +1415,26 @@ cdef void __await_prev_iter_completion(): #noexcept:
 	print( f"PREVIOUS ITERATION COMPLETED, COMMENCING NEXT CFR ITER".center(100) )
 	print( f'='*100 )
 
-def Do_Collection_Segment( list advFiles, str modelFile, str metaFile, int pRank, int sRank, 
-						   int mSize, int gameSize, int nPlayers, int travs ): 
-	_Do_Collection_Segment( advFiles, modelFile, metaFile, pRank, sRank, 
-							mSize, gameSize, nPlayers, travs )
+# Executes this worker's data collection segment: traverse gametree, derive targets, and save.
+cdef void _Do_Collection_Segment( str dataDir, int pRank, int sRank, int mSize, int gameSize, int nPlayers, int travs ): #noexcept:
 
-cdef void _Do_Collection_Segment( list advFiles, str modelFile, str metaFile, int pRank, int sRank, 
-								  int mSize, int gameSize, int nPlayers, int travs ): #noexcept:
+	cdef str advDir    = dataDir + "/segadvs",                                                                         \
+			 recDir    = dataDir + "/segrecs",                                                                         \
+			 metaFile  = dataDir + "/metadata.pickle",                                                                 \
+			 modelFile = dataDir + "/models.pickle"
 
 	# If doing multiple serial segments, segmented data being present doesn't imply prev iter ongoing
 	if sRank==0: 
-		__await_prev_iter_completion()
+		__await_prev_iter_completion( advDir, recDir )
 
 	cdef:
 		uint         tDone     = get_presolved_iters( metaFile ),                                                      \
 			         t         = tDone + 1,                                                                            \
 			         K         = travs,                                                                                \
-			         kDone     = get_rank_pretravs( pRank ),                                                           \
+			         kDone     = get_rank_pretravs( recDir, pRank ),                                                   \
 			         POVp      = (( t+INITIAL_POV ) % nPlayers) + 1,                                                   \
 			         pIdx      = POVp - 1
-		CFRCollector collector = CFRCollector( pRank, sRank, nPlayers, gameSize, t, POVp, K )
+		CFRCollector collector = CFRCollector( dataDir, pRank, sRank, nPlayers, gameSize, t, POVp, K )
 
 	# Useful global calc phase var; saves us from having to make this an additional arg everywhere
 	global T; T = t 
@@ -1429,7 +1449,7 @@ cdef void _Do_Collection_Segment( list advFiles, str modelFile, str metaFile, in
 	print( f"COMMENCING SDCFR ITER {t} COLLECTION SEGMENT".center(100) )
 	print( f"="*100 )
 
-	# Set up necessary estimator singletons for this iter
+	# Configure this worker's estimator singletons for this iter
 	ESTIMATOR.setup_advnet( modelSize=mSize, modelIter=t-1, modelFile=modelFile, GPUrank=pRank )
 	ESTIMATOR.ADVNET.train( False )
 	ESTIMATOR.setup_multimodel( modelSize=mSize, iterSpan=t-1, modelFile=modelFile, GPUrank=pRank )
@@ -1443,6 +1463,10 @@ cdef void _Do_Collection_Segment( list advFiles, str modelFile, str metaFile, in
 	collector.Traverse() # Traversal phase: gametree DFS to collect trajectories
 	collector.Calculate_Targets() # Calc phase: Derive AdvNet targets from collected trajectory data
 	collector.Collection_Segment_Completed() # Collection phase done; do phase-end housekeeping
+
+
+def Do_Collection_Segment( str dataDir, int pRank, int sRank, int mSize, int gameSize, int nPlayers, int travs ):
+	_Do_Collection_Segment( dataDir, pRank, sRank, mSize, gameSize, nPlayers, travs )
 
 
 # *-* #

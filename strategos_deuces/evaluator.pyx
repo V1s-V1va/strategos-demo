@@ -61,7 +61,7 @@ cdef class Evaluator:
 		return combos
 
 	# Calculates score for a five-card hand. ASSUMES INPUT CONTAINS EXACTLY 5 CARDS
-	cdef int _get_score( self, int1 cards ): #noexcept:
+	cdef inline int _get_score( self, int1 cards ): #noexcept:
 
 		cdef int handOR
 
@@ -73,7 +73,7 @@ cdef class Evaluator:
 			return self.lookup.unsuited_lookup[ C.prime_product_from_hand( cards ) ] 
 
 	# Scores all possible five-card hands from input & returns best
-	cdef int _get_best_score( self, int1 cards ): #noexcept:
+	cdef inline int _get_best_score( self, int1 cards ): #noexcept:
 
 		cdef int2 hands  = self._get_fives( cards )
 		cdef int  nHands = hands.shape[ 0 ], bestScore = <int>MAX_HIGH_CARD, h, hScore
@@ -86,7 +86,7 @@ cdef class Evaluator:
 		return bestScore
 
 	# This is what you call externally to get hand scores from an array of Deuce ints
-	cdef uint evaluate( self, int1 cards ): #noexcept:
+	cdef inline uint evaluate( self, int1 cards ): #noexcept:
 
 		cdef int nCards = cards.shape[ 0 ]
 

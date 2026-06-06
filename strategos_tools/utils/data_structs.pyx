@@ -1041,7 +1041,7 @@ cdef class CFR_metadata:
 
 	# Records data from all phases of a CFR iter. God have mercy on my soul for this function
 	# TODO: Is there a way to make this less satanic?
-	cdef void   record_run( self ): #noexcept:
+	cdef void   record_run( self, str dataDir ): #noexcept:
 
 		cdef:
 			uint2 nNodesSeen = NP( self.nNodesSeen,dtype=uintc )
@@ -1251,7 +1251,8 @@ cdef class CFR_metadata:
 		for l in range( 1,len( output )+1 ):
 			output[ l-1 ] += '\n'
 
-		with open( "RunRecords.txt","w+" ) as recordfile: 
+		cdef outputFile = dataDir + "/RunRecords.txt"
+		with open( outputFile,"w+" ) as recordfile: 
 			recordfile.writelines( output )
 
 	# Just prints the entirety of the most recently saved mdata file
@@ -1311,7 +1312,7 @@ cdef class CFR_metadata:
 		print( f"\tRiver:   {self.ExplorationDepths[ t ][ RIVER ]}" )
 
 	# Singular call at the end of a CFR iteration to handle all end-of-iter record-keeping
-	cdef void  _CFR_iteration_completed( self, double trainTime, list lHist, list vlHist ): #noexcept:
+	cdef void  _CFR_iteration_completed( self, double trainTime, list lHist, list vlHist, str dataDir ): #noexcept:
 
 		# Calculate derived quantities
 		cdef:
@@ -1358,7 +1359,7 @@ cdef class CFR_metadata:
 
 		# Save, print, and do cleanup
 		self.save()
-		self.record_run()
+		self.record_run( dataDir )
 		self.print_iter()
 		print()
 
@@ -1388,8 +1389,8 @@ cdef class CFR_metadata:
 	def collection_phase_completed( self, str recordDir ):
 		self._collection_phase_completed( recordDir )
 
-	def CFR_iteration_completed( self, double trainTime, list lHist, list vlHist ): 
-		self._CFR_iteration_completed( trainTime, lHist, vlHist )
+	def CFR_iteration_completed( self, double trainTime, list lHist, list vlHist, str dataDir ): 
+		self._CFR_iteration_completed( trainTime, lHist, vlHist, dataDir )
 
 
 # *-* # 

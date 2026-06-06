@@ -163,7 +163,7 @@ cdef class DATAMACHINE:
 
 	cdef uint1    __history_mask( self, uint hLen ) #noexcept
 
-	cdef voi      __populate_temp_storage( self, list shuffledSamples ) #noexcept
+	cdef void     __populate_temp_storage( self, list shuffledSamples ) #noexcept
 
 	cdef void     __destroy_temp_storage( self ) #noexcept
 
@@ -199,9 +199,9 @@ cdef class CFR_metadata:
 
 	cdef void   save( self ) #noexcept
 
-	cdef list __get_segment_files( self ) #noexcept
+	cdef list __get_segment_files( self, str recordDir ) #noexcept
 
-	cdef list __get_segment_dicts( self ) #noexcept
+	cdef list __get_segment_dicts( self, str recordDir ) #noexcept
 
 	cdef dict __unify_segment_dicts( self, list segdicts ) #noexcept
 
@@ -209,15 +209,15 @@ cdef class CFR_metadata:
 	
 	cdef void   collection_summary( self ) #noexcept
 
-	cdef void  _collection_phase_completed( self ) #noexcept
+	cdef void  _collection_phase_completed( self, str recordDir ) #noexcept
 
-	cdef void   record_run( self ) #noexcept
+	cdef void   record_run( self, str dataDir ) #noexcept
 
 	cdef void   print_latest( self ) #noexcept
 
 	cdef void   print_iter( self ) #noexcept
 
-	cdef void  _CFR_iteration_completed( self, double trainTime, list lHist, list vlHist ) #noexcept
+	cdef void  _CFR_iteration_completed( self, double trainTime, list lHist, list vlHist, str dataDir ) #noexcept
 
 
 # *-* #

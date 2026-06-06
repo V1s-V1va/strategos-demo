@@ -26,7 +26,7 @@ cdef class ZMap:
 		vector_int UZn
 		uint       size
 
-	cdef bint contains( self, ll zKey ) #noexcept
+	cdef bint Contains( self, ll zKey ) #noexcept
 
 	cdef int  payout_from( self, ll zKey ) #noexcept
 
@@ -50,7 +50,7 @@ cdef class ConnectionMap:
 
 	cdef void replace_connection( self, ll oldKey, ll newKey ) #noexcept
 
-	cdef bint connects_to( self, ll to_key ) #noexcept
+	cdef bint Connects_To( self, ll key ) #noexcept
 
 
 cdef class GTNode:
@@ -88,9 +88,9 @@ cdef class GTNode:
 
 	cdef void          __INIT_TERMINUS__( self ) #noexcept
 
-	cdef void          __INIT__( self, uint traversalPOV, gamenode fromNode, bint is_terminal, uint estimatorRank=* ) #noexcept
+	cdef void          __INIT__( self, uint traversalPOV, gamenode fromNode, bint Is_Terminal, uint estimatorRank=* ) #noexcept
 
-	cdef bint            has_direct_connection_to( self, ll key ) #noexcept
+	cdef bint            Has_Direct_Connection_To( self, ll key ) #noexcept
 
 	cdef void            skip_dealer_connection( self, ll skip_deal_key, ll skip_to_key ) #noexcept
 
@@ -100,7 +100,7 @@ cdef class GTNode:
 
 	cdef void            initialize_fwd_reaches( self ) #noexcept
 
-	cdef uint1           count_zpath_decision_points( self ) #noexcept
+	cdef uint1           count_path_action_points( self ) #noexcept
 
 	cdef vector_ll       PathKeys( self ) #noexcept
 
@@ -131,7 +131,7 @@ cdef class GameTree:
 	cdef vector_ll GTKeys
 	cdef NodeVector Nodes
 
-	cdef bint   contains( self, ll nodeKey ) #noexcept
+	cdef bint   Contains( self, ll nodeKey ) #noexcept
 
 	cdef GTNode node_at( self, ll nodeKey ) #noexcept
 
@@ -155,7 +155,7 @@ cdef class CFRCollector:
 
 		object    pyRNG
 
-	cdef void     __INIT__( self, uint parallelRank, uint serialRank, uint nPlayers, uint gameSize, uint for_iter, uint POVplayer, uint segTravs ) #noexcept
+	cdef void     __INIT__( self, str dataDir, uint parallelRank, uint serialRank, uint nPlayers, uint gameSize, uint for_iter, uint POVplayer, uint segTravs ) #noexcept
 
 	cdef GTNode     at( self, ll nodeKey ) #noexcept
 
@@ -185,7 +185,7 @@ cdef class CFRCollector:
 
 	cdef void     __complete_terminal_initialization( self, GTNode zNode ) #noexcept
 
-	cdef void       initialize_entry( self, gamenode n, bint is_terminal ) #noexcept
+	cdef void       initialize_entry( self, gamenode n, bint Is_Terminal ) #noexcept
 
 	cdef int        ActionSample( self, flt1 from_strategy ) #noexcept
 
@@ -272,9 +272,9 @@ cdef class CFRCollector:
 	cdef void       Collection_Segment_Completed( self ) #noexcept
 
 
-cdef void __await_prev_iter_completion() #noexcept
+cdef void __await_prev_iter_completion( str advDir, str recDir ) #noexcept
 
-cdef void  _Do_Collection_Segment( list advFiles, str modelFile, str metaFile, int pRank, int sRank, int mSize, int nPlayers, int gameSize, int travs ) #noexcept
+cdef void  _Do_Collection_Segment( str dataDir, int pRank, int sRank, int mSize, int nPlayers, int gameSize, int travs ) #noexcept
 
 
 # *-* # 

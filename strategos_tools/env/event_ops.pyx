@@ -116,7 +116,7 @@ cdef class gameevent:
 				 aStr  = str( self.Is_AllIn ).rjust( 6 )             if self.Type!=NULLEVENT else NOPE,               \
 				 dStr  = str( self.AllInDiff ).rjust( 6 )            if self.Type!=NULLEVENT else NOPE,               \
 				 dtStr = str( self.DealTo ).rjust( 6 )               if self.Type!=NULLEVENT else NOPE,               \
-				 cStr  = PrettyCardStrings( cDealt,compact=TRUE )[0] if self.Type!=NULLEVENT else NOPE
+				 cStr  = PrettyCardStrings( cDealt,Compact=TRUE )[0] if self.Type!=NULLEVENT else NOPE
 
 		# Blinds technically considered raises, adjust type str for readability if blind step
 		if stepNum==5: 

@@ -269,4 +269,15 @@ cdef class actionset:
 		input( "\nYE?" )
 
 
+	# ----- GAMEPLAY UI FUNCTIONS ------------------------------------------------------------------
+	# TODO: MOVE THESE TO THE SAME CLASS AS WITH GAMENODE & INFOSET
+
+
+	# Useful function for live gameplay interface - allows us to retrieve a gameevent from minimal information
+	cdef gameevent     reconstruct_action( self, uint eType, uint observedTotalBet=0 ): #noexcept:
+
+		if eType!=RAISE: return self.at( 0 ) if eType==FOLD else self.at( self.CheckCallIdx )
+		if eType==RAISE: return self.at( self.__get_raise_aIdx( from_total_bet=observedTotalBet ) )
+
+
 # *-* # 

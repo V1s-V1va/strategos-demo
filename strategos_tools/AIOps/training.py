@@ -299,7 +299,7 @@ class TrainManager:
 				print( f"Total time taken: {self.TrainTime:.0f}sec." )
 
 			cleanupDir = self.DataDir + "/segadvs"
-			self.CFR_mData.CFR_iteration_completed( self.TrainTime, self.LHist, self.VLHist )
+			self.CFR_mData.CFR_iteration_completed( self.TrainTime, self.LHist, self.VLHist, self.DataDir )
 			post_iter_cleanup( advDir=cleanupDir, for_iter=self.CFRIter )
 			print()
 

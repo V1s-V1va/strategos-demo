@@ -8,6 +8,7 @@ from cython.view   cimport array as cyarr
 from libc.limits   cimport UINT_MAX
 from libc.math     cimport INFINITY
 
+import numpy as np
 from numpy import asarray as NP, expand_dims as newaxis
 from numpy import float64 as f32, float32 as f32, intc, uintc
 
