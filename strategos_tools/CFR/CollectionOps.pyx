@@ -274,7 +274,7 @@ cdef class GTNode:
 		if not self.Is_Terminal:
 			zeros       = cyarr( (nZ,nH,T), FLTSIZE, 'f' )
 			zeros[:]    = 0
-1419			zeroReaches = MultiMat( from_view=zeros )
+			zeroReaches = MultiMat( from_view=zeros )
 			self.FwdReaches = ConnectionMap( from_key=self.Key, to_keys=self.Zn, weights=zeroReaches )
 
 		# TODO: Do you need 𝓹(z) weights to tell you which hInds are 0?
