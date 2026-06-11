@@ -132,11 +132,11 @@ cdef class Card:
 		cdef bint red_suit = ((suit_int==2) or (suit_int==4))
 
 		# Do we need to colour the suit red?
-		cdef str s = PRETTY_SUITS[ suit_int ].decode(), r = STR_RANKS[ rank_int ],
+		cdef str s = PRETTY_SUITS[ suit_int ].decode(), r = STR_RANKS[ rank_int ]
 		if red_suit: 
 			s = colored(s, "red")
 
-		cdef cStr = f" [ {r}{s} ] " if not compact else f"{r}{s}"
+		cdef str cStr = f" [ {r}{s} ] " if not compact else f"{r}{s}"
 		if center: 
 			cStr = cStr.center(6) if not red_suit else '  ' + cStr + '  ' # Coloring fucks up .center()???
 		return cStr 

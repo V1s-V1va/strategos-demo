@@ -768,6 +768,7 @@ cdef class DATAMACHINE:
 			self.M_batched  [ b ][ :bsize ] = self._M  [ bstart:bstop ] # history masks
 
 	# Just so we can check that all the metadata looks good, mostly a testing/debugging tool
+	# TODO: _hC and _bC were split into rank, suit, and card idx fields, fix this
 	cdef void     __constructor_summary( self ): #noexcept:
 
 		cdef bint H_Exists  = self._H  is not None,                                                                    \
@@ -830,6 +831,7 @@ cdef class DATAMACHINE:
 		return DataBatch( bH, bhCc,bhCr,bhCs, bfCc,bfCr,bfCs, btCc,btCr,btCs, brCc,brCr,brCs, 
 						  bA, bV, bW, bM, self.GPU )
 
+	# TODO: C_batched was split into rank, suit, and card idx fields, fix this
 	cdef void      _summary( self ): #noexcept:
 
 		print( '\n'+('='*50) )
@@ -1251,7 +1253,7 @@ cdef class CFR_metadata:
 		for l in range( 1,len( output )+1 ):
 			output[ l-1 ] += '\n'
 
-		cdef outputFile = dataDir + "/RunRecords.txt"
+		cdef str outputFile = dataDir + "/RunRecords.txt"
 		with open( outputFile,"w+" ) as recordfile: 
 			recordfile.writelines( output )
 

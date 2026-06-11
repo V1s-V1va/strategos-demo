@@ -50,7 +50,7 @@ cdef class ZMap:
 		self.size = 0
 
 	cdef bint Contains( self, ll zKey ): #noexcept:
-		return self.Zn.Contains( zKey )
+		return self.Zn.contains( zKey )
 
 	# Looks up the endgame payoff from the terminal node specified by zKey
 	cdef int  payout_from( self, ll zKey ): #noexcept:
@@ -124,7 +124,7 @@ cdef class ConnectionMap:
 
 	# Does the origin node connect to to_key?
 	cdef bint Connects_To( self, ll key ): #noexcept:
-		return self.to_keys.Contains( key )
+		return self.to_keys.contains( key )
 
 
 # GameTree node. Basically wraps a gamenode with game path info we need for calculating nn targets
@@ -181,7 +181,7 @@ cdef class GTNode:
 			if pathNode.ActingPlayer() != DEALER: 
 				pathKeys.append( pathNode.GTKey() )
 
-		if not pathKeys.Contains( self.Key ): 
+		if not pathKeys.contains( self.Key ): 
 			pathKeys.append( self.Key )
 
 		return pathKeys
@@ -274,7 +274,7 @@ cdef class GTNode:
 		if not self.Is_Terminal:
 			zeros       = cyarr( (nZ,nH,T), FLTSIZE, 'f' )
 			zeros[:]    = 0
-			zeroReaches = MultiMat( from_view=zeros )
+1419			zeroReaches = MultiMat( from_view=zeros )
 			self.FwdReaches = ConnectionMap( from_key=self.Key, to_keys=self.Zn, weights=zeroReaches )
 
 		# TODO: Do you need 𝓹(z) weights to tell you which hInds are 0?
@@ -325,6 +325,7 @@ cdef class NodeVector:
 		for n from 0 <= n < 99:
 			if 2**n > self.size: 
 				return 2**n
+		raise MemoryError( "Exactly what the fuck are you doing that you need a vector > 2^99 in size for???" )
 
 	cdef void   resize( self, uint newCap=0 ): #noexcept:
 		self.capacity = newCap if newCap > 0 else self.__get_min_spanning_cap()

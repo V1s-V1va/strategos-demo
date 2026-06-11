@@ -274,7 +274,7 @@ cdef class CFRCollector:
 
 cdef void __await_prev_iter_completion( str advDir, str recDir ) #noexcept
 
-cdef void  _Do_Collection_Segment( str dataDir, int pRank, int sRank, int mSize, int nPlayers, int gameSize, int travs ) #noexcept
+cdef void  _Do_Collection_Segment( str dataDir, int pRank, int sRank, int mSize, int gameSize, int nPlayers, int travs ) #noexcept
 
 
 # *-* # 

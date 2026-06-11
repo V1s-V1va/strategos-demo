@@ -331,10 +331,10 @@ cdef uint2 find_winning_cards( uint2 from_winning_hand, uint2 with_hole_cards, s
 	if of_rank_class=="High Card":       return find_high_card( with_hole_cards )
 	if of_rank_class=="Pair":            return find_pairs( from_winning_hand, with_hole_cards )
 	if of_rank_class=="Two Pair":        return find_pairs( from_winning_hand, with_hole_cards )
-	if of_rank_class=="Three Of A Kind": return find_three_of_a_kind( from_winning_hand, with_hole_cards )
-	if of_rank_class=="Four Of A Kind":  return find_four_of_a_kind( from_winning_hand, with_hole_cards )
+	if of_rank_class=="Three of a Kind": return find_three_of_a_kind( from_winning_hand, with_hole_cards )
+	if of_rank_class=="Four of a Kind":  return find_four_of_a_kind( from_winning_hand, with_hole_cards )
 	else: return from_winning_hand
-	# ^All other rank classes are 5card hands. Since from_winning_hand is 5 cards by definition, just return to sender
+	# ^All other rank classes are 5card hands. from_winning_hand is 5 cards by definition, so just return to sender
 
 # Just takes some cardVecs, converts to deuce integers, then uses deuce's card formatting to make it pretty *-* 
 cdef list  PrettyCardStrings( uint2 cardVecs, bint Compact=FALSE, bint Center=TRUE ): #noexcept:

@@ -236,7 +236,7 @@ cdef class actionset:
 		print( f"MatchCall = ......{self.MatchCall}" )
 		print( f"MinRaise = .......{self.MinRaise}" )
 		print( f"MaxRaise = .......{self.MaxRaise}" )
-		print( f"NumActions = .....{self.NumActions}" )
+		print( f"NumActions = .....{self.size}" )
 		print( f"NumNonRaises = ...{self.NumNonRaises}" )
 		print( f"NumRaises = ......{self.NumRaises}" )
 		print( f"Posting_Blind = ..{['NOPE', 'SMALL', 'BIG'][ self.Posting_Blind ]}" )
@@ -258,26 +258,15 @@ cdef class actionset:
 			object    RNG
 			uint      randomIdx
 			gameevent randomEvent
-		if self.NumActions > 0:
+		if self.size > 0:
 			RNG         = np.random.default_rng()
-			randomIdx   = RNG.choice( self.NumActions )
+			randomIdx   = RNG.choice( self.size )
 			randomEvent = self.at( randomIdx ) 
 
-		print( f"A.at( randomIdx )            = {randomEvent.ShortString()}" )
-		print( f"A.ActionIndex( randomEvent ) = {self.ActionIndex( randomEvent )} (should be == {randomIdx})" )
+		print( f"A.at( randomIdx )         = {randomEvent.ShortString()}" )
+		print( f"A.index_of( randomEvent ) = {self.index_of( randomEvent )} (should be == {randomIdx})" )
 
 		input( "\nYE?" )
-
-
-	# ----- GAMEPLAY UI FUNCTIONS ------------------------------------------------------------------
-	# TODO: MOVE THESE TO THE SAME CLASS AS WITH GAMENODE & INFOSET
-
-
-	# Useful function for live gameplay interface - allows us to retrieve a gameevent from minimal information
-	cdef gameevent     reconstruct_action( self, uint eType, uint observedTotalBet=0 ): #noexcept:
-
-		if eType!=RAISE: return self.at( 0 ) if eType==FOLD else self.at( self.CheckCallIdx )
-		if eType==RAISE: return self.at( self.__get_raise_aIdx( from_total_bet=observedTotalBet ) )
 
 
 # *-* # 

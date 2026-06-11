@@ -36,8 +36,6 @@ cdef class actionset:
 
 	cdef str         inline_summary( self ) #noexcept
 
-	cdef gameevent   reconstruct_action( self, uint eType, uint observedTotalBet=* ) #noexcept
-
 	cdef void        summary( self ) #noexcept
 
 	cdef void        DIAGNOSTIC( self ) #noexcept

@@ -368,8 +368,8 @@ cdef class infoset:
 			uint      rStart      = self.CurrentRoundStart(), blind = self.Is_Posting_Blind(), s, c
 			uint1     bTotals     = self.BetTotals(), rbTotals = self.BetTotals( from_point=rStart ), eArr
 			uint2     bCards      = self.BoardCards(), hCards = self.HoleCards(), oCards = self.ObservableCards(),     \
-					  subjHist    = self.NNHistory()
-  			tuple     BLINDSTATES = ( "NOPE", "SB", "BB" )
+					  subjHist    = self.ObservableHistory()
+			tuple     BLINDSTATES = ( "NOPE", "SB", "BB" )
 			str       bPretty     = ''.join( CardOps.PrettyCardStrings( bCards ) ),                                    \
 				      hPretty     = ''.join( CardOps.PrettyCardStrings( hCards ) ),                                    \
 				      oPretty     = ''.join( CardOps.PrettyCardStrings( oCards ) ),                                    \
